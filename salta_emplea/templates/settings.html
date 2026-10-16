@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import admin_nav %}
+{% block title %}Configuración{% endblock %}
+{% block content %}<div class="container admin-container section-space">
+<p class="eyebrow">Administración privada</p>
+<h1>Configuración</h1>{{ admin_nav('settings') }}<form class="paper form-paper" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<fieldset>
+<legend>Vigencia de ofertas</legend>
+<label class="field">Solicitar revisión después de estos días<input type="number" name="review_days" value="{{ settings.review_days|default(30, true) }}" min="1" max="365" required>
+<span class="field-help">Se aplica cuando no hay fecha de cierre explícita. Solicitar revisión no significa que la oferta haya terminado.</span>
+</label>
+<p class="small">Un vencimiento explícito permite archivar. Un error temporal al consultar una fuente genera una alerta para revisión.</p>
+</fieldset>
+<fieldset>
+<legend>Difusión manual</legend>
+<p class="form-help">Habilitar un canal prepara el enlace o texto para compartir ofertas aprobadas y activas. No envía mensajes ni publica por sí solo.</p>{% for channel in channels %}<label class="check-field">
+<input type="checkbox" name="{{ channel.key }}" value="1"{% if channel.enabled %} checked{% endif %}>
+<span>{{ channel.name }}<small>{{ channel.description|default('Preparación manual de contenido para un canal propio.') }}</small>
+</span>
+</label>{% else %}<label class="check-field">
+<input type="checkbox" name="whatsapp_manual" value="1"{% if settings.whatsapp_manual %} checked{% endif %}>
+<span>Preparar enlaces de WhatsApp<small>La persona decide con quién compartir.</small>
+</span>
+</label>
+<label class="check-field">
+<input type="checkbox" name="social_manual" value="1"{% if settings.social_manual %} checked{% endif %}>
+<span>Preparar texto para redes<small>Copiar y publicar manualmente en canales propios.</small>
+</span>
+</label>{% endfor %}</fieldset>
+<button class="button" type="submit">Guardar configuración</button>
+</form>
+<div class="admin-grid">
+<section class="paper form-paper">
+<h2>Correo</h2>
+<p>Las alertas requieren un proveedor configurado, un remitente autorizado y el programador de tareas activo. La confirmación y cada envío quedan registrados en el panel.</p>
+<p class="small">Las credenciales se configuran como variables de entorno del servidor, fuera del código. Nunca las ingreses en una oferta o fuente.</p>
+</section>
+<section class="paper form-paper">
+<h2>Publicación automática</h2>
+<p>Los canales actuales ofrecen preparación manual. Para automatizar la publicación se necesitan cuentas propias, permisos y una integración oficial compatible.</p>
+<p class="small">Verificá requisitos y costos antes de habilitar un proveedor. No se envían mensajes a contactos ni grupos sin autorización y consentimiento.</p>
+</section>
+</div>
+</div>{% endblock %}

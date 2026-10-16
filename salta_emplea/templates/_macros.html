@@ -1,0 +1,122 @@
+{% macro status_badge(status) -%}
+  {% set labels = {'pending':'Pendiente de revisión','review':'En revisión','draft':'Borrador','approved':'Aprobada','published':'Publicada','rejected':'Rechazada','archived':'Archivada','expired':'Vencida','active':'Activa','unconfirmed':'Sin confirmar','confirmed':'Confirmada','unsubscribed':'Baja','sent':'Enviado','queued':'En cola','failed':'Falló','disabled':'Deshabilitado','enabled':'Habilitado','running':'En curso','completed':'Completado','succeeded':'Completado','partial':'Completada con incidencias','interrupted':'Interrumpida','retry':'Reintento pendiente','cancelled':'Cancelado','sending':'En proceso'} %}
+  <span class="badge badge-{{ status|default('pending') }}">{{ labels.get(status, status|value) }}</span>
+{%- endmacro %}
+
+{% macro job_card(job) -%}
+  <article class="job-card">
+    <div class="job-card-top">
+<span class="eyebrow">{{ job.sector|value }}</span>
+<span class="badge badge-modality">{{ job.modality|value }}</span>
+</div>
+    <h3>
+<a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a>
+</h3>
+    <p class="company">{{ job.company|value }}</p>
+    <ul class="job-meta" aria-label="Datos del empleo">
+<li>
+<span aria-hidden="true">⌖</span> {{ job.location|value }}</li>
+<li>{{ job.schedule|value }}</li>
+<li>{{ job.contract_type|value }}</li>
+</ul>
+    {% if job.salary_amount %}<p class="salary">{{ job.salary_currency|value }} {{ job.salary_amount }} <span>/ {{ job.salary_period|value }}</span>
+</p>{% endif %}
+    <div class="job-card-bottom">
+<span>Incorporada {{ job.collected_at|date }}</span>
+<a class="text-link" href="{{ url_for('job_detail', job_id=job.id) }}">Ver oferta <span aria-hidden="true">↗</span>
+</a>
+</div>
+  </article>
+{%- endmacro %}
+
+{% macro ad_card(ad) -%}
+  <aside class="ad-card" aria-label="Publicidad">
+<span class="ad-label">Publicidad</span>
+<a href="{{ ad.link_url }}" rel="noopener noreferrer sponsored" target="_blank">{% if ad.image_url %}<img src="{{ ad.image_url }}" alt="{{ ad.label|default('Anuncio de un negocio local') }}" loading="lazy">{% endif %}<span>{{ ad.label|default('Conocé este negocio local') }}</span>
+</a>
+</aside>
+{%- endmacro %}
+
+{% macro admin_nav(active) -%}
+  <nav class="admin-nav" aria-label="Administración">
+<a href="{{ url_for('admin') }}"{% if active == 'overview' %} aria-current="page"{% endif %}>Ofertas y actividad</a>
+<a href="{{ url_for('admin_sources') }}"{% if active == 'sources' %} aria-current="page"{% endif %}>Fuentes</a>
+<a href="{{ url_for('admin_ads') }}"{% if active == 'ads' %} aria-current="page"{% endif %}>Publicidad</a>
+<a href="{{ url_for('admin_settings') }}"{% if active == 'settings' %} aria-current="page"{% endif %}>Configuración</a>
+<form action="{{ url_for('logout') }}" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="link-button" type="submit">Salir</button>
+</form>
+</nav>
+{%- endmacro %}
+
+{% macro offer_fields(data, admin=false) -%}
+  <fieldset>
+<legend>Datos del empleo</legend>
+<p class="form-help">Transcribí solo lo que dice el aviso. Si falta un dato, dejá el campo vacío.</p>
+    <div class="form-grid">
+      <label class="field span-2">Puesto{% if admin %} <span class="required">*</span>{% else %} <span class="muted">(si está informado)</span>{% endif %}<input name="title" value="{{ data.title|default('', true) }}" maxlength="180"{% if admin %} required{% endif %} autocomplete="off">
+</label>
+      <label class="field">Empresa<input name="company" value="{{ data.company|default('', true) }}" maxlength="180">
+</label>
+      <label class="field">Localidad<input name="location" value="{{ data.location|default('', true) }}" maxlength="120" placeholder="Por ejemplo: Orán">
+</label>
+      <label class="field">Modalidad<select name="modality">
+<option value="">No informado</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if data.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select>
+</label>
+      <label class="field">Rubro<input name="sector" value="{{ data.sector|default('', true) }}" maxlength="120">
+</label>
+      <label class="field">Jornada<input name="schedule" value="{{ data.schedule|default('', true) }}" maxlength="120" placeholder="Por ejemplo: jornada completa">
+</label>
+      <label class="field">Tipo de contratación<input name="contract_type" value="{{ data.contract_type|default('', true) }}" maxlength="120">
+</label>
+      <label class="field span-2">Descripción<textarea name="description" rows="6" maxlength="15000">{{ data.description|default('', true) }}</textarea>
+</label>
+      <label class="field span-2">Requisitos<textarea name="requirements" rows="4" maxlength="10000">{{ data.requirements|default('', true) }}</textarea>
+</label>
+      <label class="field span-2">Enlace o contacto para postularse<input name="application_url" value="{{ data.application_url|default('', true) }}" maxlength="2000" placeholder="https://…, mailto:… o https://wa.me/…">
+<span class="field-help">Solo el enlace, correo o WhatsApp que figure en el aviso original.</span>
+</label>
+      <label class="field">Fecha de publicación original<input type="date" name="original_date" value="{{ (data.original_date or '')[:10] }}">
+</label>
+      <label class="field">Fecha de cierre explícita<input type="date" name="expires_at" value="{{ data.expires_at|default('')|deadline_input }}">
+<span class="field-help">Completá únicamente si la fuente indica un vencimiento.</span>
+</label>
+    </div>
+    <p class="form-help">Para empleos remotos, verificá y transcribí las restricciones de residencia y zona horaria. La oportunidad debe ser accesible para personas que viven en Salta, Argentina.</p>
+  </fieldset>
+  <fieldset>
+<legend>Sueldo informado en la fuente</legend>
+<p class="form-help">No estimes ni completes sueldos por comparación con otros avisos.</p>
+<div class="form-grid">
+<label class="field">Importe o rango<input name="salary_amount" value="{{ data.salary_amount|default('', true) }}" maxlength="100" placeholder="Solo si está informado">
+</label>
+<label class="field">Moneda<input name="salary_currency" value="{{ data.salary_currency|default('', true) }}" maxlength="12" placeholder="ARS, USD…">
+</label>
+<label class="field">Período<input name="salary_period" value="{{ data.salary_period|default('', true) }}" maxlength="50" placeholder="mes, hora…">
+</label>
+<label class="field span-2">Texto que respalda el sueldo<textarea name="salary_source_evidence" rows="2" maxlength="2000">{{ data.salary_source_evidence|default('', true) }}</textarea>
+</label>
+</div>
+</fieldset>
+  <fieldset>
+<legend>Procedencia y aviso original</legend>
+<div class="form-grid">
+<label class="field">Nombre de la fuente<input name="source_name" value="{{ data.source_name|default('', true) }}" maxlength="180">
+</label>
+<label class="field">Enlace a la publicación original<input type="url" name="source_url" value="{{ data.source_url|default('', true) }}" maxlength="2000" placeholder="https://…">
+</label>
+<label class="field span-2">Texto original<textarea name="original_text" rows="7" maxlength="30000">{{ data.original_text|default('', true) }}</textarea>
+<span class="field-help">Se conserva para revisar la información y su procedencia.</span>
+</label>{% if not admin %}<label class="field span-2">Imagen del aviso <span class="muted">(opcional)</span>
+<input type="file" name="image" accept="image/png,image/jpeg,image/webp">
+<span class="field-help">PNG, JPEG o WebP. La imagen se revisa antes de publicar. No adjuntes CV ni documentos personales.</span>
+</label>{% endif %}</div>
+</fieldset>
+  {% if admin %}<fieldset>
+<legend>Revisión</legend>
+<label class="field">Datos inciertos, separados por coma<input name="uncertain_fields" value="{% if data.uncertain_fields is string %}{{ data.uncertain_fields }}{% else %}{{ data.uncertain_fields|default([], true)|join(', ') }}{% endif %}" placeholder="empresa, contacto…">
+<span class="field-help">Contrastá estos datos con el original antes de aprobar.</span>
+</label>
+</fieldset>{% endif %}
+{%- endmacro %}

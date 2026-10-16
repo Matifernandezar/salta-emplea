@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}<div class="container narrow section-space">
+<div class="paper message-paper">
+<span class="message-icon" aria-hidden="true">⌖</span>
+<h1>{{ title }}</h1>
+<div class="prose preserve-lines">{{ message }}</div>
+<a class="button button-outline" href="{{ url_for('index') }}">Volver al buscador</a>
+</div>
+</div>{% endblock %}

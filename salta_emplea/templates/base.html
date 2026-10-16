@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123e49">
+  <meta name="description" content="Encontrá ofertas de trabajo en Salta y oportunidades remotas accesibles desde la provincia. Postulate por el canal original del aviso.">
+  <title>{% block title %}Trabajo en Salta{% endblock %} · Salta Emplea</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Ir al contenido</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="Salta Emplea, inicio">
+        <svg viewBox="0 0 48 40" width="43" height="36" aria-hidden="true">
+<path d="M3 31 17 8l8 14 6-9 14 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M3 36h42" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+</svg>
+        <span>Salta<span class="brand-accent">Emplea</span>
+<small>Trabajo cerca. Oportunidades más lejos.</small>
+</span>
+      </a>
+      <nav class="main-nav" aria-label="Navegación principal">
+        <a href="{{ url_for('index') }}"{% if request.endpoint == 'index' %} aria-current="page"{% endif %}>Buscar trabajo</a>
+        <a href="{{ url_for('subscribe') }}"{% if request.endpoint == 'subscribe' %} aria-current="page"{% endif %}>Recibir alertas</a>
+        <a class="button button-small button-outline" href="{{ url_for('submit_job') }}">Compartir una oferta</a>
+      </nav>
+    </div>
+  </header>
+  <main id="contenido">
+    <div class="container flashes" aria-live="polite">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}<div class="notice {% if category in ['error', 'danger'] %}notice-error{% elif category == 'success' %}notice-success{% endif %}" role="status">{{ message }}</div>{% endfor %}
+      {% endwith %}
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+<a class="footer-brand" href="{{ url_for('index') }}">Salta Emplea</a>
+<p>Un punto de encuentro para el trabajo en Salta.</p>
+<p class="small">Nombre provisional. La marca y el dominio requieren verificación.</p>
+</div>
+      <div>
+<p>Centralizamos avisos de distintas fuentes. No garantizamos contratación.</p>
+<nav class="footer-nav" aria-label="Información">
+<a href="{{ url_for('privacy') }}">Privacidad</a>
+<a href="{{ url_for('terms') }}">Condiciones</a>
+<a href="{{ url_for('admin') }}">Panel de administración</a>
+</nav>
+<p class="small">Para pedir una corrección o el retiro de un aviso, usá “Reportar un problema” en la oferta.</p>
+</div>
+    </div>
+  </footer>
+</body>
+</html>

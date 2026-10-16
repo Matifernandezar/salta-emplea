@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import admin_nav, status_badge %}
+{% macro source_fields(source) %}<div class="form-grid">
+<label class="field">Nombre <span class="required">*</span>
+<input name="name" value="{{ source.name|default('', true) }}" maxlength="180" required>
+</label>
+<label class="field">URL de la fuente <span class="required">*</span>
+<input name="url" type="url" value="{{ source.url|default('', true) }}" maxlength="2000" required placeholder="https://…">
+</label>
+<label class="field">Método de acceso<select name="method">
+<option value="manual"{% if source.method == 'manual' %} selected{% endif %}>Manual: enlace, texto o imagen</option>
+<option value="jobicy"{% if source.method == 'jobicy' %} selected{% endif %}>API pública Jobicy</option>
+</select>
+</label>
+<label class="field">Frecuencia en horas<input name="frequency_hours" type="number" min="6" max="8760" value="{{ source.frequency_hours|default(24, true) }}" required>
+</label>
+<label class="field span-2">Condiciones de uso o evidencia de autorización<input name="terms_url" type="url" value="{{ source.terms_url|default('', true) }}" maxlength="2000" placeholder="https://…">
+</label>
+</div>
+<label class="check-field">
+<input type="checkbox" name="authorized" value="1"{% if source.authorized %} checked{% endif %}>
+<span>Revisé el acceso técnico y las condiciones de uso, y confirmo que este método está permitido.</span>
+</label>
+<label class="check-field">
+<input type="checkbox" name="enabled" value="1"{% if source.status == 'active' %} checked{% endif %}>
+<span>Habilitar fuente<small>Una fuente manual no se recopila automáticamente. Una fuente automática requiere el programador del servidor.</small>
+</span>
+</label>{% endmacro %}
+{% block title %}Fuentes de ofertas{% endblock %}
+{% block content %}<div class="container admin-container section-space">
+<div class="page-heading">
+<div>
+<p class="eyebrow">Administración privada</p>
+<h1>Fuentes de ofertas</h1>
+</div>
+</div>{{ admin_nav('sources') }}<div class="notice">Integrá únicamente mecanismos permitidos. No se sortean inicios de sesión, restricciones ni bloqueos. La recopilación deja cada aviso pendiente de revisión.</div>
+<div class="admin-grid">
+<section class="paper form-paper">
+<h2>Registrar una fuente</h2>
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="create">{{ source_fields({}) }}<button class="button" type="submit">Registrar fuente</button>
+</form>
+</section>
+<section class="paper form-paper">
+<p class="eyebrow">Acceso responsable</p>
+<h2>Antes de habilitar</h2>
+<ol class="spaced-list">
+<li>Comprobá el acceso real y las condiciones vigentes.</li>
+<li>Registrá el método, su frecuencia y la evidencia de autorización.</li>
+<li>Verificá el resultado de una ejecución real en el registro de tareas.</li>
+<li>Revisá ubicación y elegibilidad de cada oferta remota.</li>
+</ol>
+<p class="small">Redes sociales y fuentes sin mecanismo autorizado pueden incorporarse manualmente. No se promete cobertura total.</p>
+<a class="text-link" href="{{ url_for('admin_new') }}">Incorporar un aviso manual →</a>
+</section>
+</div>
+<section class="admin-section">
+<h2>Registro de fuentes</h2>{% for source in sources %}<details class="admin-details source-detail">
+<summary>
+<span>{{ source.name }}</span>{{ status_badge(source.status|default('pending')) }}</summary>
+<div class="details-body">
+<dl class="metadata-list">
+<div>
+<dt>Método</dt>
+<dd>{{ source.method|value }}</dd>
+</div>
+<div>
+<dt>Última consulta</dt>
+<dd>{{ source.last_run_at|date }}</dd>
+</div>
+<div>
+<dt>Último resultado</dt>
+<dd>{{ source.last_result|value }}</dd>
+</div>
+</dl>
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="update">
+<input type="hidden" name="id" value="{{ source.id }}">{{ source_fields(source) }}<button class="button button-outline" type="submit">Guardar fuente</button>
+</form>
+</div>
+</details>{% else %}<div class="empty-state compact-empty">
+<h3>No hay fuentes registradas</h3>
+<p>Comenzá con una fuente cuyo acceso y condiciones hayas comprobado.</p>
+</div>{% endfor %}</section>
+</div>{% endblock %}

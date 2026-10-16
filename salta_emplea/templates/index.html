@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import job_card, ad_card %}
+{% block title %}Encontrá tu próximo trabajo{% endblock %}
+{% block content %}
+<section class="hero">
+<div class="container hero-inner">
+<div class="hero-copy">
+<p class="eyebrow">Oportunidades en toda la provincia</p>
+<h1>Tu próximo trabajo<br>puede estar más cerca.</h1>
+<p>Encontrá ofertas en Salta y empleos remotos para trabajar desde acá. Revisá los detalles y postulate por el canal original.</p>
+<a class="hero-scroll" href="#ofertas">Explorar ofertas <span aria-hidden="true">↓</span>
+</a>
+</div>
+<div class="hero-art" aria-hidden="true">
+<svg viewBox="0 0 500 290">
+<circle cx="362" cy="83" r="44" fill="#dce8df"/>
+<path d="m0 260 128-168 102 130 64-95 206 133" fill="#d0dfdc"/>
+<path d="m0 287 129-147 111 119 95-74 165 102" fill="#a8c3bc"/>
+<path d="m0 289 169-89 135 81 86-53 110 61" fill="#789f94"/>
+<path d="M0 289h500" stroke="#123e49" stroke-width="2"/>
+</svg>
+<span>Desde Salta, hacia lo que viene.</span>
+</div>
+</div>
+</section>
+<section class="container search-section" aria-label="Buscador de ofertas">
+<form class="search-panel" method="get" action="{{ url_for('index') }}">
+<div class="search-main">
+<label class="field search-query" for="search-q">¿Qué trabajo estás buscando?<input id="search-q" type="search" name="q" value="{{ filters.q|default('', true) }}" placeholder="Puesto, empresa o palabra clave">
+</label>
+<button class="button" type="submit">Buscar ofertas <span aria-hidden="true">→</span>
+</button>
+</div>
+<div class="filter-grid">
+<label class="field">Localidad<select name="location">
+<option value="">Toda Salta</option>{% for option in facets.locations %}<option value="{{ option }}"{% if filters.location == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+</label>
+<label class="field">Rubro<select name="sector">
+<option value="">Todos los rubros</option>{% for option in facets.sectors %}<option value="{{ option }}"{% if filters.sector == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+</label>
+<label class="field">Modalidad<select name="modality">
+<option value="">Todas</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if filters.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select>
+</label>
+<label class="field">Jornada<select name="schedule">
+<option value="">Todas</option>{% for option in facets.schedules %}<option value="{{ option }}"{% if filters.schedule == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+</label>
+<label class="field">Incorporación<select name="days">
+<option value="">Cualquier fecha</option>{% for val,label in [('1','Últimas 24 horas'),('7','Últimos 7 días'),('30','Últimos 30 días')] %}<option value="{{ val }}"{% if filters.days|string == val %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+</label>
+</div>
+<div class="filter-note">
+<span>Las ofertas remotas deben aceptar postulantes residentes en Salta.</span>{% if filters.q or filters.location or filters.sector or filters.modality or filters.schedule or filters.days %}<a href="{{ url_for('index') }}">Limpiar filtros</a>{% endif %}</div>
+</form>
+</section>
+<section id="ofertas" class="container section-space">{% for ad in ads if ad.placement == 'home' %}<div class="home-ad">{{ ad_card(ad) }}</div>{% endfor %}<div class="section-heading">
+<div>
+<p class="eyebrow">Una búsqueda, más posibilidades</p>
+<h2>{% if filters.q or filters.location or filters.sector or filters.modality or filters.schedule or filters.days %}Resultados de tu búsqueda{% else %}Ofertas recientes{% endif %}</h2>
+</div>
+<span class="section-caption">Incorporadas más recientemente</span>
+</div>
+<div class="listing-layout">
+<div class="jobs-list">{% for job in jobs %}{{ job_card(job) }}{% else %}<div class="empty-state">
+<span class="empty-icon" aria-hidden="true">⌕</span>
+<h3>{% if filters.q or filters.location or filters.sector or filters.modality or filters.schedule or filters.days %}No encontramos ofertas con estos filtros{% else %}Las próximas oportunidades empiezan acá{% endif %}</h3>
+<p>{% if filters.q or filters.location or filters.sector or filters.modality or filters.schedule or filters.days %}Probá otra palabra o ampliá la localidad, el rubro o la fecha.{% else %}Todavía no hay ofertas publicadas. Cada aviso pasa por una revisión antes de aparecer en este espacio.{% endif %}</p>
+<a class="button button-outline" href="{{ url_for('subscribe') }}">Avisame cuando haya oportunidades</a>
+</div>{% endfor %}</div>
+<aside class="listing-aside">
+<div class="aside-card alert-card">
+<span class="mini-icon" aria-hidden="true">✉</span>
+<h3>Que el trabajo te encuentre.</h3>
+<p>Elegí qué oportunidades querés recibir por correo. Suscripción voluntaria y baja sencilla.</p>
+<a class="button button-outline" href="{{ url_for('subscribe') }}">Crear mi alerta</a>
+</div>{% for ad in ads if ad.placement == 'sidebar' %}{{ ad_card(ad) }}{% endfor %}<div class="aside-card plain-card">
+<h3>¿Conocés una vacante?</h3>
+<p>Compartí el enlace, el texto o una imagen. La revisamos antes de publicarla.</p>
+<a class="text-link" href="{{ url_for('submit_job') }}">Aportar una oferta <span aria-hidden="true">↗</span>
+</a>
+</div>
+</aside>
+</div>
+</section>
+<section class="trust-band">
+<div class="container trust-grid">
+<div>
+<span class="step-number">01</span>
+<h3>Buscá a tu manera</h3>
+<p>Filtrá por localidad, rubro o modalidad.</p>
+</div>
+<div>
+<span class="step-number">02</span>
+<h3>Leé el aviso completo</h3>
+<p>Consultá los datos disponibles y su fuente.</p>
+</div>
+<div>
+<span class="step-number">03</span>
+<h3>Postulate directamente</h3>
+<p>Usá el enlace, WhatsApp o correo del aviso. Sin cuenta y sin cargar tu CV acá.</p>
+</div>
+</div>
+</section>
+{% endblock %}

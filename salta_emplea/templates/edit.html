@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import admin_nav, offer_fields, status_badge %}
+{% block title %}{% if job.id %}Revisar oferta{% else %}Incorporar oferta{% endif %}{% endblock %}
+{% block content %}<div class="container admin-container section-space">
+<a class="back-link" href="{{ url_for('admin') }}">← Volver al panel</a>
+<div class="page-heading">
+<div>
+<p class="eyebrow">Revisión editorial</p>
+<h1>{% if job.id %}Revisar oferta{% else %}Incorporar una oferta{% endif %}</h1>
+</div>{% if job.id %}{{ status_badge(job.status) }}{% endif %}</div>{{ admin_nav('overview') }}{% if errors %}<div class="notice notice-error" role="alert">
+<strong>Revisá los siguientes datos:</strong>
+<ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>{% endif %}{% if job.flags %}<div class="notice notice-error">
+<strong>Señales que requieren atención</strong>
+<ul>{% for flag in job.flags %}<li>{{ {'payment_requested':'El aviso podría pedir un pago para postularse.','image_review':'El aviso contiene una imagen que requiere revisión humana.','possible_duplicate':'Posible duplicado: compará con los avisos existentes.'}.get(flag, flag) }}</li>{% endfor %}</ul>
+<p>No apruebes sin contrastar estas señales con la fuente.</p>
+</div>{% endif %}{% if job.uncertain_fields %}<div class="notice">
+<strong>Información incierta:</strong> {% if job.uncertain_fields is string %}{{ job.uncertain_fields }}{% else %}{{ job.uncertain_fields|join(', ') }}{% endif %}. Revisala con el aviso original.</div>{% endif %}{% if duplicates %}<div class="notice">
+<strong>Posibles duplicados</strong>
+<p>Compará empresa, puesto, contacto y ubicación antes de aprobar.</p>
+<ul>{% for duplicate in duplicates %}<li>
+<a href="{{ url_for('admin_edit', job_id=duplicate.id) }}">{{ duplicate.title|value }} · {{ duplicate.company|value }}</a>{% if duplicate.reason %} — {{ duplicate.reason }}{% endif %}{% if duplicate.score is defined %} (similitud registrada: {{ duplicate.score }}){% endif %}</li>{% endfor %}</ul>
+</div>{% endif %}<div class="review-layout">
+<aside class="paper original-panel">
+<p class="eyebrow">Referencia</p>
+<h2>Aviso original</h2>
+<dl class="metadata-list">
+<div>
+<dt>Fuente</dt>
+<dd>{{ job.source_name|value }}</dd>
+</div>
+<div>
+<dt>Incorporación</dt>
+<dd>{{ job.collected_at|date }}</dd>
+</div>
+<div>
+<dt>Última comprobación</dt>
+<dd>{{ job.last_checked_at|date }}</dd>
+</div>
+</dl>{% if job.source_url %}<a class="button button-outline button-full" href="{{ job.source_url }}" rel="noopener noreferrer" target="_blank">Abrir fuente original ↗</a>{% endif %}<pre class="original-text">{{ job.original_text|value }}</pre>{% if job.image_path and job.id %}<a href="{{ url_for('admin_image', job_id=job.id) }}" target="_blank" rel="noopener noreferrer">
+<img class="original-image" src="{{ url_for('admin_image', job_id=job.id) }}" alt="Imagen original aportada para esta oferta" loading="lazy">
+</a>
+<p class="small muted">La lectura de una imagen puede contener errores. Verificá cada dato.</p>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
+<summary>Historial de procedencia</summary>{% for item in provenance %}<article class="activity-item">
+<strong>{{ item.source_name|default(item.name|default('Fuente aportada'), true) }}</strong>
+<p class="small">{{ item.collected_at|default(item.created_at)|date }}</p>{% if item.source_url %}<a class="small" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">Consultar publicación ↗</a>{% endif %}<p class="small preserve-lines">{{ item.original_text|default(item.note|default(''), true) }}</p>
+</article>{% endfor %}</details>{% endif %}</aside>
+<section class="paper form-paper prepared-panel">
+<p class="eyebrow">Versión preparada</p>
+<h2>Datos para publicar</h2>
+<p class="form-help">Guardá los cambios antes de cambiar el estado. Un cambio sustancial en una oferta aprobada vuelve a revisión.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true) }}{% if not job.id %}<label class="field">Imagen original <span class="muted">(opcional)</span>
+<input type="file" name="image" accept="image/png,image/jpeg,image/webp">
+</label>{% endif %}<button class="button" type="submit">Guardar para revisión</button>
+</form>
+</section>
+</div>{% if job.id %}<section class="paper transition-panel">
+<h2>Decisión de publicación</h2>
+<p>La aprobación publica los datos guardados. Verificá que la oferta sea legítima, esté vigente y tenga un canal de postulación válido.</p>
+<div class="transition-actions">
+<form class="approval-form{% if job.flags or job.uncertain_fields or job.review_needed %} approval-has-alert{% endif %}" action="{{ url_for('admin_transition', job_id=job.id, action='approve') }}" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if job.flags or job.uncertain_fields or job.review_needed %}<label class="check-field">
+<input type="checkbox" name="acknowledge" value="1" required>
+<span>Revisé el aviso original, los datos inciertos, los posibles duplicados y las alertas. Confirmo que se puede publicar.</span>
+</label>{% endif %}<button class="button" type="submit">Aprobar y publicar</button>
+</form>{% for action,label in [('reject','Rechazar'),('archive','Archivar'),('expire','Marcar vencida')] %}<form action="{{ url_for('admin_transition', job_id=job.id, action=action) }}" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="button button-outline" type="submit">{{ label }}</button>
+</form>{% endfor %}{% if job.status in ['approved', 'published'] %}<a class="text-link" href="{{ url_for('job_detail', job_id=job.id) }}">Ver publicación ↗</a>{% endif %}</div>
+</section>{% endif %}</div>{% endblock %}

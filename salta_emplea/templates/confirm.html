@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}<div class="container narrow section-space">
+<div class="paper message-paper">
+<h1>{{ title }}</h1>
+<p class="lead">{{ message }}</p>
+<form method="post" action="{{ action_url }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="button" type="submit">Confirmar</button>
+</form>
+<a class="text-link" href="{{ url_for('index') }}">Volver al buscador</a>
+</div>
+</div>{% endblock %}

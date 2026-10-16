@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import admin_nav %}
+{% macro ad_fields(ad) %}<div class="form-grid">
+<label class="field span-2">Nombre o título del anuncio <span class="required">*</span>
+<input name="label" value="{{ ad.label|default('', true) }}" maxlength="180" required>
+</label>
+<label class="field span-2">URL de la imagen <span class="required">*</span>
+<input type="url" name="image_url" value="{{ ad.image_url|default('', true) }}" maxlength="2000" placeholder="https://…" required>
+<span class="field-help">Imagen alojada con HTTPS. Usá una imagen liviana y con permiso de publicación.</span>
+</label>
+<label class="field span-2">Enlace de destino <span class="required">*</span>
+<input type="url" name="link_url" value="{{ ad.link_url|default('', true) }}" maxlength="2000" placeholder="https://…" required>
+</label>
+<label class="field">Ubicación<select name="placement">
+<option value="sidebar"{% if ad.placement == 'sidebar' %} selected{% endif %}>Columna de la página principal</option>
+<option value="home"{% if ad.placement == 'home' %} selected{% endif %}>Página principal</option>
+</select>
+</label>
+<label class="field">Comienza<input type="date" name="starts_at" value="{{ (ad.starts_at or '')[:10] }}" required>
+</label>
+<label class="field">Finaliza<input type="date" name="ends_at" value="{{ (ad.ends_at or '')[:10] }}" required>
+</label>
+</div>
+<label class="check-field">
+<input type="checkbox" name="active" value="1"{% if ad.active %} checked{% endif %}>
+<span>Habilitar dentro del período indicado</span>
+</label>{% endmacro %}
+{% block title %}Publicidad local{% endblock %}
+{% block content %}<div class="container admin-container section-space">
+<p class="eyebrow">Administración privada</p>
+<h1>Publicidad local</h1>{{ admin_nav('ads') }}<div class="notice">Los espacios se identifican como “Publicidad” y se mantienen separados de las ofertas de trabajo. Contratación y cobro manuales; no se registran métricas de audiencia ficticias.</div>
+<section class="paper form-paper">
+<h2>Crear anuncio</h2>
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="create">{{ ad_fields({}) }}<button class="button" type="submit">Guardar anuncio</button>
+</form>
+</section>
+<section class="admin-section">
+<h2>Anuncios registrados</h2>{% for ad in ads %}<details class="admin-details">
+<summary>
+<span>{{ ad.label|default('Anuncio') }}</span>
+<span class="badge">{% if ad.active %}Habilitado{% else %}Deshabilitado{% endif %}</span>
+</summary>
+<div class="details-body">
+<p class="small">Período: {{ ad.starts_at|date }} — {{ ad.ends_at|date }}. La visibilidad depende de las fechas y de su habilitación.</p>{% if ad.image_url %}<img class="ad-preview" src="{{ ad.image_url }}" alt="Vista previa del anuncio" loading="lazy">{% endif %}<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="update">
+<input type="hidden" name="id" value="{{ ad.id }}">{{ ad_fields(ad) }}<button class="button button-outline" type="submit">Guardar cambios</button>
+</form>
+</div>
+</details>{% else %}<div class="empty-state compact-empty">
+<h3>Todavía no hay anuncios</h3>
+<p>Podés preparar el primer espacio desde el formulario.</p>
+</div>{% endfor %}</section>
+</div>{% endblock %}

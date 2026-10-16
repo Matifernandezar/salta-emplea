@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Ingresar al panel{% endblock %}
+{% block content %}<div class="container login-wrap section-space">
+<div class="paper form-paper">
+<p class="eyebrow">Administración</p>
+<h1>Ingresá al panel</h1>
+<p class="muted">Acceso exclusivo para administrar Salta Emplea.</p>{% if configured is defined and not configured %}<div class="notice">El acceso administrativo está pendiente de configuración.</div>{% endif %}<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label class="field">Contraseña<input type="password" name="password" autocomplete="current-password" required autofocus>
+</label>
+<button class="button button-full" type="submit">Ingresar →</button>
+</form>
+</div>
+</div>{% endblock %}

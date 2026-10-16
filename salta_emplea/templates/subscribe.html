@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Alertas de empleo{% endblock %}
+{% block content %}<div class="container narrow section-space">
+<a class="back-link" href="{{ url_for('index') }}">← Volver al buscador</a>
+<p class="eyebrow">Tu próxima oportunidad, por correo</p>
+<h1>Recibí ofertas que te interesan.</h1>
+<p class="lead">Elegí tus preferencias. Te pediremos confirmar tu correo antes de activar la suscripción.</p>{% if mail_ready is defined and not mail_ready %}<div class="notice">Las alertas por correo están pendientes de configuración. Tu dirección no se registrará hasta que el servicio esté habilitado.</div>{% endif %}{% if errors %}<div class="notice notice-error" role="alert">
+<ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>{% endif %}{% set data = data|default({}) %}<form class="paper form-paper" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="honeypot" aria-hidden="true">
+<label>Dejar vacío<input name="website" tabindex="-1" autocomplete="off">
+</label>
+</div>
+<label class="field">Correo electrónico <span class="required">*</span>
+<input name="email" type="email" autocomplete="email" maxlength="254" value="{{ data.email|default('', true) }}" placeholder="vos@ejemplo.com" required>
+</label>
+<div class="form-grid">
+<label class="field">Localidad<input name="location" maxlength="120" value="{{ data.location|default('', true) }}" placeholder="Todas las localidades">
+<span class="field-help">Dejá vacío para recibir ofertas de toda la provincia.</span>
+</label>
+<label class="field">Rubro<input name="sector" maxlength="120" value="{{ data.sector|default('', true) }}" placeholder="Todos los rubros">
+</label>
+<label class="field">Modalidad<select name="modality">
+<option value="">Todas las modalidades</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if data.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select>
+</label>
+<label class="field">Frecuencia<select name="frequency">
+<option value="daily"{% if data.frequency == 'daily' %} selected{% endif %}>Diaria</option>
+<option value="weekly"{% if data.frequency == 'weekly' %} selected{% endif %}>Semanal</option>
+</select>
+</label>
+</div>
+<label class="check-field">
+<input name="consent" type="checkbox" value="1" required{% if data.consent %} checked{% endif %}>
+<span>Quiero recibir alertas de empleo por correo y acepto la <a href="{{ url_for('privacy') }}">política de privacidad</a>.</span>
+</label>
+<button class="button" type="submit">Solicitar suscripción →</button>
+<p class="small">Solo ofertas aprobadas y activas. Podés darte de baja desde cada correo. No solicitamos CV ni perfiles de candidatos.</p>
+</form>
+</div>{% endblock %}

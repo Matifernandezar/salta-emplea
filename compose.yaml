@@ -1,0 +1,20 @@
+services:
+  web:
+    build: .
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DATABASE_PATH: /data/salta.sqlite3
+      UPLOAD_DIR: /data/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/salud', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  data:
