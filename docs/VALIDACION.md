@@ -2,11 +2,11 @@
 
 ## Adaptación a GitHub y Vercel — 17/10/2026
 
-La suite actual informa **138 pruebas aprobadas y 6 omitidas**. Se agregaron backend PostgreSQL, migración explícita, imágenes privadas en la base, leases para tareas, lotes con presupuesto, entrada Flask, preparación de estáticos, cron autenticado y CI de GitHub. Compilación Python, configuración JSON y controles de cambios pasan.
+La suite completa informa **144 pruebas aprobadas, sin omisiones**, ejecutada con PostgreSQL 17 real en un contenedor local. Se agregaron backend PostgreSQL, migración explícita, imágenes privadas en la base, leases para tareas, lotes con presupuesto, entrada Flask, preparación de estáticos, cron autenticado y CI de GitHub. Compilación Python, configuración JSON y controles de cambios pasan.
 
-Las seis omitidas requieren PostgreSQL real: el servidor local de pruebas se pudo preparar, pero los intentos de ejecutar la suite con permiso de red quedaron interrumpidos y la ejecución sin ese permiso no pudo conectar. No se da ese circuito por verificado. La prueba HTTP PostgreSQL está escrita y pendiente; el circuito HTTP SQLite sigue pasando.
+Las pruebas reales verificaron migraciones repetidas, transacciones, importación concurrente sin duplicados, leases y reservas de correo. El circuito HTTP PostgreSQL comprobó aporte con imagen privada, acceso administrativo, aprobación, búsqueda, postulación, confirmación de suscripción, reejecución de cron sin duplicados, baja y vencimiento. Detectó una referencia ambigua en el UPSERT del límite de formularios; se corrigió calificando las columnas de la tabla. Las bases de prueba se aislaron en esquemas aleatorios y se eliminaron al finalizar. Esto no verifica todavía la base de producción ni entregas de correo reales.
 
-GitHub rechazó `createRepository` con Resource not accessible by integration; la comprobación del repositorio respondió 404. Vercel rechazó la consulta de integraciones con 403. No se creó repositorio remoto ni proyecto de este producto, no se conectó base de producción y no existe despliegue público. La CI, las migraciones remotas y los cron versionados están preparados, no operativos en producción. No se contrataron servicios.
+El titular creó el repositorio y se subió el historial local a GitHub. La primera CI usó el commit previo a la corrección de PostgreSQL; la validación del commit corregido se comprueba en Actions. Vercel había rechazado la consulta de integraciones con 403. La conexión de la base de producción y el despliegue público siguen pendientes. No se contrataron servicios.
 
 ## Validación de la primera entrega local
 

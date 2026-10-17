@@ -4,7 +4,7 @@ Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio
 
 ## Despliegue en Vercel desde GitHub
 
-La adaptación ya incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza. El despliegue sigue pendiente de permisos del repositorio y de conectar una base persistente.
+La adaptación ya incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. El código está en [GitHub](https://github.com/Matifernandezar/salta-emplea) y las 144 pruebas, incluidas las de PostgreSQL real, pasan localmente. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza. Falta conectar la base de producción y verificar el despliegue.
 
 ## Instalación local
 

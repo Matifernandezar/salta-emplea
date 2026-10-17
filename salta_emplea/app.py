@@ -111,7 +111,7 @@ def create_app(config=None):
         conn = connection()
         now = int(time.time())
         with conn:
-            conn.execute('INSERT INTO rate_limits(key,count,reset_at) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN reset_at<? THEN 1 ELSE count+1 END, reset_at=CASE WHEN reset_at<? THEN excluded.reset_at ELSE reset_at END', (key, now+seconds, now, now))
+            conn.execute('INSERT INTO rate_limits(key,count,reset_at) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN rate_limits.reset_at<? THEN 1 ELSE rate_limits.count+1 END, reset_at=CASE WHEN rate_limits.reset_at<? THEN excluded.reset_at ELSE rate_limits.reset_at END', (key, now+seconds, now, now))
             row = conn.execute('SELECT count FROM rate_limits WHERE key=?', (key,)).fetchone()
         if row['count'] > limit:
             abort(429, 'Demasiados intentos. Volvé a intentar más tarde.')

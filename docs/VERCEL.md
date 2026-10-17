@@ -4,9 +4,9 @@ Actualización: 17/10/2026. Código preparado para Flask sobre Vercel con Postgr
 
 ## Estado de acceso
 
-GitHub identifica la cuenta `Matifernandezar` y permite trabajar en repositorios instalados. El intento autorizado de crear `salta-emplea` fue rechazado por GitHub con **Resource not accessible by integration (createRepository)**. La consulta posterior del repositorio devolvió 404. No se sustituyó ningún repositorio existente ni se publicó el código en otro proyecto.
+El titular creó [Matifernandezar/salta-emplea](https://github.com/Matifernandezar/salta-emplea). El repositorio se creó público y se conservó esa visibilidad. El código y los cinco commits iniciales en español ya se subieron a main, sin secretos, bases ni imágenes. El bloqueo previo de createRepository quedó resuelto por esa creación manual. No se modificó otro repositorio.
 
-Vercel identifica el equipo `matias-projects-2dbf9656`. La consulta de integraciones de almacenamiento recibió **403 forbidden**. No hay una credencial PostgreSQL configurada ni un token de CLI Vercel; no se reutilizaron secretos de otras aplicaciones. Para completar el circuito hacen falta un repositorio existente al que se pueda escribir y una conexión de base para este producto.
+Vercel identifica el equipo `matias-projects-2dbf9656`. La consulta inicial de integraciones de almacenamiento recibió **403 forbidden**. No hay una credencial PostgreSQL de producción configurada ni un token de CLI Vercel; no se reutilizaron secretos de otras aplicaciones. La vinculación del proyecto y la conexión persistente se verifican por separado.
 
 ## Configuración preparada
 
