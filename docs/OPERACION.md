@@ -1,5 +1,7 @@
 # Guía simple de administración
 
+Para GitHub/Vercel, seguir primero VERCEL.md: la persistencia usa PostgreSQL y los cron de la plataforma. SQLite, archivos locales y cron del servidor descritos abajo siguen siendo la alternativa para desarrollo o servidor propio. En PostgreSQL las imágenes privadas están en la base, y el bloqueo de tareas es un lease compartido. `DATABASE_URL` selecciona ese modo; el comando de respaldo SQLite no se aplica a PostgreSQL.
+
 ## Entrar y publicar la primera oferta
 
 1. Instalar según el README, generar clave y hash de contraseña y guardarlos en `.env`. Sin hash no se puede ingresar al panel. No hay contraseña de fábrica.

@@ -1,5 +1,13 @@
 # Arquitectura y fases
 
+## Adaptación vigente para Vercel
+
+El usuario eligió GitHub y Vercel. Se conserva Flask y el HTML renderizado; PostgreSQL reemplaza el disco persistente en ese despliegue. SQLite queda disponible para desarrollo y servidor propio. Las imágenes originales son JPEG privados en la tabla uploads y se sirven solamente después de autenticar al administrador. Esto evita otro servicio de archivos en la primera versión; medir almacenamiento y migrar imágenes a Blob privado si el volumen lo requiere.
+
+La base se migra explícitamente en la preparación del despliegue. Los arranques y las peticiones PostgreSQL no crean tablas ni usan almacenamiento local. Las reservas editoriales y de correo usan bloqueos transaccionales; las tareas usan un lease persistente de 900 segundos, compatible con conexiones agrupadas. Las ejecuciones tienen un presupuesto cooperativo de 180 segundos y un máximo de 300 en Vercel; los pendientes se retoman sin duplicar publicaciones o envíos. Cada entorno debe usar una base y secretos propios.
+
+La propuesta inicial de servidor se conserva debajo como antecedente. La guía actual es VERCEL.md; precios y límites en VERCEL-COSTOS.md. No se contrataron servicios ni se consiguió todavía un despliegue público.
+
 Decisión previa a implementar, 16/10/2026. Repositorio e infraestructura iniciales: espacio vacío; sin secretos, identidades de nube ni servicios contratados.
 
 ## Arquitectura propuesta

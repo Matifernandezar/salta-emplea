@@ -1,6 +1,10 @@
 # Salta Emplea — nombre provisional
 
-Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio gratuito, sin cuentas para candidatos, CV ni pagos. HTML liviano, Flask y SQLite persistente. Los avisos entran pendientes y requieren aprobación del administrador; editar una publicación revoca su aprobación.
+Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio gratuito, sin cuentas para candidatos, CV ni pagos. HTML liviano y Flask; PostgreSQL para Vercel y SQLite para desarrollo local. Los avisos entran pendientes y requieren aprobación del administrador; editar una publicación revoca su aprobación.
+
+## Despliegue en Vercel desde GitHub
+
+La adaptación ya incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza. El despliegue sigue pendiente de permisos del repositorio y de conectar una base persistente.
 
 ## Instalación local
 
@@ -25,9 +29,9 @@ Abrir `http://127.0.0.1:8000` y `/admin`. El modo de desarrollo no envía correo
 
 ## Variables
 
-El archivo [.env.example](.env.example) documenta solamente los nombres, sin secretos. `SECRET_KEY` firma sesiones y enlaces; conservarla estable y respaldarla de forma privada. `ADMIN_PASSWORD_HASH` habilita el acceso del administrador. `DATABASE_PATH` y `UPLOAD_DIR` apuntan a almacenamiento persistente. `PUBLIC_BASE_URL` debe ser el origen HTTPS público del sitio. `APP_ENV` controla las comprobaciones de producción. `RESEND_API_KEY` y `MAIL_FROM` habilitan el proveedor de correo. `TRUST_PROXY` solo se activa detrás de un único proxy controlado que reemplace las cabeceras de origen. La aplicación no confía en cabeceras de proxy por defecto.
+El archivo [.env.example](.env.example) documenta solamente los nombres, sin secretos. `SECRET_KEY` firma sesiones y enlaces; conservarla estable y respaldarla de forma privada. `ADMIN_PASSWORD_HASH` habilita el acceso del administrador. `DATABASE_URL` selecciona PostgreSQL; sin ella, `DATABASE_PATH` y `UPLOAD_DIR` se usan para almacenamiento local. `CRON_SECRET` protege las tareas de Vercel. `PUBLIC_BASE_URL` debe ser el origen HTTPS público del sitio. `APP_ENV` controla las comprobaciones de producción. `RESEND_API_KEY` y `MAIL_FROM` habilitan el proveedor de correo. `TRUST_PROXY` solo se activa detrás de un único proxy controlado que reemplace las cabeceras de origen. La aplicación no confía en cabeceras de proxy por defecto.
 
-## Producción
+## Alternativa: producción en servidor propio
 
 Consultar [arquitectura](docs/ARQUITECTURA.md), [costos](docs/COSTOS.md), [fuentes](docs/FUENTES.md) y [operación](docs/OPERACION.md). No se ha contratado ni desplegado infraestructura pública.
 

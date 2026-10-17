@@ -1,5 +1,15 @@
 # Resultado por fase
 
+## Adaptación a GitHub y Vercel — 17/10/2026
+
+La suite actual informa **138 pruebas aprobadas y 6 omitidas**. Se agregaron backend PostgreSQL, migración explícita, imágenes privadas en la base, leases para tareas, lotes con presupuesto, entrada Flask, preparación de estáticos, cron autenticado y CI de GitHub. Compilación Python, configuración JSON y controles de cambios pasan.
+
+Las seis omitidas requieren PostgreSQL real: el servidor local de pruebas se pudo preparar, pero los intentos de ejecutar la suite con permiso de red quedaron interrumpidos y la ejecución sin ese permiso no pudo conectar. No se da ese circuito por verificado. La prueba HTTP PostgreSQL está escrita y pendiente; el circuito HTTP SQLite sigue pasando.
+
+GitHub rechazó `createRepository` con Resource not accessible by integration; la comprobación del repositorio respondió 404. Vercel rechazó la consulta de integraciones con 403. No se creó repositorio remoto ni proyecto de este producto, no se conectó base de producción y no existe despliegue público. La CI, las migraciones remotas y los cron versionados están preparados, no operativos en producción. No se contrataron servicios.
+
+## Validación de la primera entrega local
+
 Verificación local: 16/10/2026. Se ejecutó `python -m pytest -q`: **111 pruebas aprobadas**. Todas las bases y ofertas de prueba están identificadas y aisladas en directorios temporales. No se enviaron mensajes ni se creó infraestructura pública.
 
 | Fase | Qué cambió | Qué se probó y resultado | Qué falta verificar / operativo |
