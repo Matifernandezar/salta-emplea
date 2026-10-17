@@ -1,0 +1,266 @@
+"""Contrato del adaptador y pruebas reales opcionales con POSTGRES_TEST_URL.
+
+Las pruebas remotas crean y borran únicamente un esquema aleatorio propio.
+La cuenta de prueba necesita CREATE SCHEMA; no usar credenciales de producción.
+"""
+
+import os
+import secrets
+from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from urllib.parse import urlsplit
+
+import pytest
+
+from salta_emplea import db, domain, mailer
+from salta_emplea.app import create_app
+
+
+def test_postgres_target_detection_and_row_contract():
+    assert db.is_postgres("postgres://user:secret@localhost/test")
+    assert db.is_postgres("postgresql://user:secret@localhost/test")
+    assert not db.is_postgres("/tmp/local.sqlite3")
+    row = db._Row(("id", "title"), (4, "Puesto"))
+    assert row[0] == row["id"] == 4
+    assert row[-1] == "Puesto"
+    assert dict(row) == {"id": 4, "title": "Puesto"}
+
+
+def test_parameters_leave_literals_and_comments_intact():
+    sql = "SELECT ?, '¿qué? 10%', 'it''s ?', \"a?\" -- ?\n/* ? */ WHERE name LIKE ?"
+    assert db._qmark_sql(sql) == "SELECT %s, '¿qué? 10%%', 'it''s ?', \"a?\" -- ?\n/* ? */ WHERE name LIKE %s"
+
+
+def test_insert_translation_is_limited_to_known_forms():
+    sql, generated = db._postgres_statement("INSERT OR IGNORE INTO provenance(job_id) VALUES (?)")
+    assert sql == "INSERT INTO provenance(job_id) VALUES (?) ON CONFLICT DO NOTHING RETURNING id"
+    assert generated
+    sql, generated = db._postgres_statement("INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO NOTHING")
+    assert sql.endswith("ON CONFLICT(key) DO NOTHING")
+    assert not generated
+    sql, generated = db._postgres_statement("INSERT INTO jobs(title) VALUES (?) RETURNING id")
+    assert sql.count("RETURNING") == 1
+    assert not generated
+
+
+def test_sqlite_task_lock_is_shared_and_released(tmp_path):
+    target = tmp_path / "locks.sqlite3"
+    db.init_db(target)
+    first, second = db.connect(target), db.connect(target)
+    try:
+        with db.task_lock(first, "salta-emplea-tasks") as acquired:
+            assert acquired
+            with db.task_lock(second, "salta-emplea-tasks") as other:
+                assert not other
+        with db.task_lock(second, "salta-emplea-tasks") as acquired:
+            assert acquired
+    finally:
+        first.close()
+        second.close()
+
+
+@pytest.fixture
+def postgres(monkeypatch):
+    target = os.environ.get("POSTGRES_TEST_URL")
+    if not target:
+        pytest.skip("POSTGRES_TEST_URL no configurada; requiere PostgreSQL real")
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg import sql
+
+    original_connect = db.connect
+    schema = "salta_test_" + secrets.token_hex(8)
+    admin = original_connect(target)
+    admin._connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+
+    def scoped_connect(url):
+        conn = original_connect(url)
+        if db.is_postgres(url):
+            conn._connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        return conn
+
+    monkeypatch.setattr(db, "connect", scoped_connect)
+    connections = []
+
+    def connection():
+        conn = scoped_connect(target)
+        connections.append(conn)
+        return conn
+
+    try:
+        db.init_db(target)
+        yield target, connection
+    finally:
+        for conn in connections:
+            conn.close()
+        admin._connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+        admin.close()
+
+
+def _offer():
+    return {
+        "title": "Técnico de prueba PostgreSQL",
+        "company": "EMPRESA DE PRUEBA",
+        "location": "Orán",
+        "modality": "presencial",
+        "description": "Datos ficticios para pruebas automatizadas; no publicar.",
+        "source_url": "https://example.test/postgres-oferta",
+        "application_url": "mailto:pruebas@example.test",
+    }
+
+
+def test_postgres_migrations_rows_transactions_and_private_uploads(postgres):
+    target, connect = postgres
+    db.init_db(target)
+    conn = connect()
+    assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
+    assert conn.execute("SELECT fold(?)", ("TÉCNICO en Orán",)).fetchone()[0] == "tecnico en oran"
+    assert not conn.in_transaction
+    with pytest.raises(RuntimeError, match="transacción"):
+        db.editorial_lock(conn)
+    with pytest.raises(ValueError):
+        with conn:
+            conn.execute("INSERT INTO settings(key,value) VALUES (?,?)", ("rollback", "no"))
+            raise ValueError("Revertir")
+    assert not conn.in_transaction
+    assert conn.execute("SELECT value FROM settings WHERE key='rollback'").fetchone() is None
+    with conn:
+        conn.execute("INSERT INTO uploads(name,data,created_at) VALUES (?,?,?)", ("prueba.jpg", b"\x00\x01", domain.now()))
+    assert bytes(connect().execute("SELECT data FROM uploads WHERE name=?", ("prueba.jpg",)).fetchone()[0]) == b"\x00\x01"
+
+
+def test_postgres_complete_editorial_flow_and_deduplication(postgres):
+    _, connect = postgres
+    conn = connect()
+    job_id, duplicates = domain.create_job(conn, _offer(), "administrador")
+    assert isinstance(job_id, int) and not duplicates
+    assert domain.public_jobs(conn) == []
+    domain.transition_job(conn, job_id, "approve", "administrador")
+    assert [job["id"] for job in domain.public_jobs(connect(), {"q": "tecnico", "location": "orán"})] == [job_id]
+    assert domain.create_job(connect(), _offer(), "administrador")[0] == job_id
+    assert conn.execute("SELECT count(*) FROM provenance").fetchone()[0] == 1
+    updated = _offer() | {"application_url": "https://example.test/otro-contacto"}
+    domain.create_job(conn, updated, "recopilador_autorizado")
+    assert domain.public_jobs(conn) == []
+
+
+def test_postgres_concurrent_imports_share_editorial_lock(postgres):
+    _, connect = postgres
+    barrier = Barrier(2)
+
+    def import_once():
+        conn = connect()
+        barrier.wait(timeout=10)
+        return domain.create_job(conn, _offer(), "recopilador_autorizado")[0]
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(lambda _: import_once(), range(2)))
+    assert results[0] == results[1]
+    assert connect().execute("SELECT count(*) FROM jobs").fetchone()[0] == 1
+
+
+def test_postgres_leases_exclusion_expiry_and_owner_release(postgres):
+    _, connect = postgres
+    first, second = connect(), connect()
+    first_lock = db.task_lock(first, "salta-emplea-tasks")
+    assert first_lock.__enter__()
+    with db.task_lock(second, "salta-emplea-tasks") as acquired:
+        assert not acquired
+    second.execute("UPDATE task_locks SET expires_at=0 WHERE name=?", ("salta-emplea-tasks",))
+    with db.task_lock(second, "salta-emplea-tasks") as acquired:
+        assert acquired
+        first_lock.__exit__(None, None, None)
+        assert second.execute("SELECT count(*) FROM task_locks").fetchone()[0] == 1
+    assert first.execute("SELECT count(*) FROM task_locks").fetchone()[0] == 0
+
+
+def test_postgres_mail_reservations_are_idempotent(postgres):
+    _, connect = postgres
+    conn = connect()
+    job_id, _ = domain.create_job(conn, _offer(), "administrador")
+    domain.transition_job(conn, job_id, "approve", "administrador")
+    with conn:
+        subscriber_id = conn.execute(
+            "INSERT INTO subscribers(email,status,token_hash,created_at) VALUES (?,'confirmed','',?)",
+            ("prueba@example.test", domain.now()),
+        ).lastrowid
+    assert subscriber_id
+    assert mailer.queue_digests(conn, "https://example.test", "secret" * 8)["queued"] == 1
+    assert not conn.in_transaction
+    assert mailer.queue_digests(connect(), "https://example.test", "secret" * 8)["queued"] == 0
+    assert conn.execute("SELECT count(*) FROM deliveries").fetchone()[0] == 1
+    assert mailer.send_outbox(conn, {"APP_ENV": "development"})["skipped"] == 1
+
+
+def test_postgres_http_serverless_editorial_images_alerts_and_cron(postgres, tmp_path):
+    """HTTP → reglas → PostgreSQL real → otra conexión, sin envíos externos."""
+    from PIL import Image
+    from werkzeug.security import generate_password_hash
+
+    target, connect = postgres
+    password = "contraseña-exclusiva-de-pruebas-postgresql"
+    origin = "https://example.test"
+    secret = "clave-ficticia-solo-para-pruebas-postgresql"
+    app = create_app({
+        "TESTING": True, "SERVERLESS": True, "DATABASE_URL": target,
+        "SECRET_KEY": secret, "ADMIN_PASSWORD_HASH": generate_password_hash(password),
+        "PUBLIC_BASE_URL": origin, "CRON_SECRET": "cron-ficticio-de-pruebas",
+        "DATABASE_PATH": str(tmp_path / "no-debe-crearse.sqlite3"),
+        "UPLOAD_DIR": str(tmp_path / "no-debe-crearse"),
+        # .test impide cualquier entrega real aunque se ejecute el cron mail.
+        "RESEND_API_KEY": "credencial-ficticia-solo-pruebas", "MAIL_FROM": "pruebas@example.test",
+    })
+    public, admin = app.test_client(), app.test_client()
+
+    def get(client, path, **kwargs):
+        return client.get(path, base_url=origin, **kwargs)
+
+    def post(client, path, data=None):
+        with client.session_transaction(base_url=origin) as state:
+            state.setdefault("csrf", "csrf-ficticio-de-pruebas")
+            token = state["csrf"]
+        return client.post(path, base_url=origin, data={"csrf_token": token, **(data or {})})
+
+    assert not (tmp_path / "no-debe-crearse").exists()
+    assert not (tmp_path / "no-debe-crearse.sqlite3").exists()
+    assert get(public, "/salud").json == {"status": "ok"}
+    assert get(public, "/admin").status_code == 302
+    image = BytesIO()
+    Image.new("RGB", (10, 10), "white").save(image, "PNG")
+    image.seek(0)
+    assert post(public, "/publicar", _offer() | {"consent": "1", "image": (image, "prueba.png")}).status_code == 200
+    conn = connect()
+    job_id = conn.execute("SELECT id FROM jobs").fetchone()[0]
+    assert get(public, f"/ofertas/{job_id}").status_code == 404
+    assert get(public, f"/admin/imagenes/{job_id}").status_code == 302
+    assert post(admin, "/admin/ingresar", {"password": password}).status_code == 302
+    private_image = get(admin, f"/admin/imagenes/{job_id}")
+    assert private_image.status_code == 200 and private_image.mimetype == "image/jpeg"
+    assert post(admin, f"/admin/ofertas/{job_id}/approve", {"acknowledge": "1"}).status_code == 302
+    assert get(public, "/?q=tecnico&location=orán").status_code == 200
+    assert "Técnico de prueba PostgreSQL" in get(public, "/?q=tecnico").get_data(as_text=True)
+    assert "mailto:pruebas@example.test" in get(public, f"/ofertas/{job_id}").get_data(as_text=True)
+    assert post(public, "/publicar", _offer() | {"consent": "1"}).status_code == 200
+    assert conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 1
+
+    assert post(public, "/alertas", {"email": "alertas@example.test", "consent": "1", "frequency": "daily"}).status_code == 200
+    subscriber = conn.execute("SELECT * FROM subscribers").fetchone()
+    confirmation = conn.execute("SELECT body FROM outbox WHERE kind='confirmation'").fetchone()[0]
+    confirm_path = urlsplit(confirmation.split("\n\n")[1]).path
+    assert get(public, confirm_path).status_code == 200
+    assert post(public, confirm_path).status_code == 200
+    assert conn.execute("SELECT status FROM subscribers").fetchone()[0] == "confirmed"
+    assert get(public, "/api/cron/mail").status_code == 401
+    cron_headers = {"Authorization": "Bearer cron-ficticio-de-pruebas"}
+    assert get(public, "/api/cron/mail", headers=cron_headers).status_code == 200
+    assert get(public, "/api/cron/mail", headers=cron_headers).status_code == 200
+    assert conn.execute("SELECT count(*) FROM deliveries").fetchone()[0] == 1
+    unsubscribe_path = "/alertas/baja/" + mailer.unsubscribe_token(subscriber["id"], secret)
+    assert post(public, unsubscribe_path).status_code == 200
+    assert conn.execute("SELECT status FROM subscribers").fetchone()[0] == "unsubscribed"
+    with conn:
+        conn.execute("UPDATE jobs SET expires_at='2000-01-01T00:00:00+00:00' WHERE id=?", (job_id,))
+    assert get(public, "/api/cron/expire", headers=cron_headers).status_code == 200
+    assert get(public, f"/ofertas/{job_id}").status_code == 404
+    assert conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0] == "expired"

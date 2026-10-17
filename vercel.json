@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
+  "buildCommand": "python scripts/prepare_vercel.py",
+  "functions": {
+    "wsgi.py": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cron/expire", "schedule": "7 * * * *" },
+    { "path": "/api/cron/collect", "schedule": "17 */6 * * *" },
+    { "path": "/api/cron/mail", "schedule": "*/15 * * * *" }
+  ]
+}

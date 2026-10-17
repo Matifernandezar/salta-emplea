@@ -11,6 +11,8 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from . import db
 from zoneinfo import ZoneInfo
 
 
@@ -206,7 +208,7 @@ def create_job(conn, data, actor="comunidad"):
     stamp = now()
     with conn:
         # Reservar la escritura antes del control evita una carrera entre dos recolectores.
-        conn.execute("UPDATE settings SET value=value WHERE key='__domain_lock__'")
+        db.editorial_lock(conn)
         if cleaned["source_canonical_url"]:
             existing = conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone()
             if existing:
@@ -307,7 +309,7 @@ def public_jobs(conn, filters=None):
     for field in ("location", "sector", "modality", "schedule"):
         value = _text(filters.get(field), 200)
         if value:
-            conditions.append(field + " = ? COLLATE NOCASE")
+            conditions.append('lower(' + field + ') = lower(?)')
             values.append(value)
     days = filters.get("days") or filters.get("date_days")
     if days:

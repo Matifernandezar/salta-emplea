@@ -11,6 +11,7 @@ import json
 import re
 import secrets
 import socket
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
@@ -21,6 +22,7 @@ from urllib.request import Request, urlopen
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .domain import public_jobs
+from . import db
 
 
 CONFIRM_MAX_AGE = 48 * 60 * 60
@@ -57,6 +59,8 @@ def _transaction(conn):
     else:
         conn.execute("BEGIN IMMEDIATE")
     try:
+        if nested:
+            db.mailer_lock(conn)
         yield
     except Exception:
         if nested:
@@ -165,13 +169,38 @@ def _digest_body(subscriber_id, jobs, base_url, secret_key, unsubscribe_url=None
     return "\n".join(lines)
 
 
-def queue_digests(conn, base_url, secret_key):
-    """Reserva ofertas nuevas respetando filtros, frecuencia y consentimiento."""
+def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None):
+    """Reserva un lote de suscripciones sin perder el avance entre corridas.
+
+    El cursor circular avanza incluso si no hay ofertas o todavía no corresponde
+    enviar. Así un lote pequeño no deja a las últimas personas sin procesar.
+    ``last_sent_at`` se conserva exclusivamente para entregas confirmadas.
+    """
     counters = _counts()
     instant = _now()
+    limit = max(1, min(int(limit), 100))
     with _transaction(conn):
-        subscribers = conn.execute("SELECT * FROM subscribers WHERE status='confirmed' ORDER BY id").fetchall()
+        cursor = conn.execute("SELECT value FROM settings WHERE key='digest_cursor'").fetchone()
+        try:
+            after_id = int(cursor[0]) if cursor else 0
+        except (ValueError, TypeError):
+            after_id = 0
+        subscribers = conn.execute(
+            "SELECT * FROM subscribers WHERE status='confirmed' AND id>? ORDER BY id LIMIT ?", (after_id, limit),
+        ).fetchall()
+        if len(subscribers) < limit:
+            subscribers += conn.execute(
+                "SELECT * FROM subscribers WHERE status='confirmed' AND id<=? ORDER BY id LIMIT ?",
+                (after_id, limit - len(subscribers)),
+            ).fetchall()
         for subscriber in subscribers:
+            if deadline is not None and time.monotonic() >= deadline:
+                counters['budget_exhausted'] = True
+                break
+            conn.execute(
+                "INSERT INTO settings(key,value) VALUES ('digest_cursor',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(subscriber['id']),),
+            )
             previous = conn.execute(
                 "SELECT created_at FROM outbox WHERE subscriber_id=? AND kind='digest' ORDER BY id DESC LIMIT 1",
                 (subscriber["id"],),
@@ -290,7 +319,7 @@ def _prepare_delivery(conn, item, config):
     return body
 
 
-def send_outbox(conn, config):
+def send_outbox(conn, config, *, limit=None, deadline=None):
     """Envía con Resend únicamente en producción configurada. Nunca usar en tests sin mock.
 
     Se registra ``uncertain`` antes de salir a la red: un cierre del proceso o
@@ -304,11 +333,17 @@ def send_outbox(conn, config):
     # No enviar mientras el llamador conserva cambios sin confirmar.
     if conn.in_transaction:
         raise ValueError("Confirmá la transacción antes de procesar correos.")
+    limit = max(1, min(int(limit if limit is not None else config.get('TASK_MAIL_BATCH', 10)), 100))
     pending_ids = [row[0] for row in conn.execute(
-        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY id LIMIT 100",
-        (_stamp(),),
+        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY id LIMIT ?",
+        (_stamp(), limit),
     )]
     for outbox_id in pending_ids:
+        # Reservar tiempo para el timeout de red antes de marcar un intento.
+        # Lo diferido sigue pendiente, sin consumir intentos ni reservas nuevas.
+        if deadline is not None and time.monotonic() + 15 >= deadline:
+            counters['budget_exhausted'] = True
+            break
         with _transaction(conn):
             item = conn.execute(
                 "SELECT * FROM outbox WHERE id=? AND status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?)",
@@ -344,7 +379,8 @@ def send_outbox(conn, config):
         status = "uncertain"
         error = None
         try:
-            with urlopen(request, timeout=15) as response:
+            timeout = min(15, max(0.1, deadline - time.monotonic())) if deadline is not None else 15
+            with urlopen(request, timeout=timeout) as response:
                 code = response.getcode()
                 if 200 <= code < 300:
                     status = "sent"

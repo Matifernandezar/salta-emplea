@@ -1,0 +1,11 @@
+.git
+.venv
+.env*
+instance
+backups
+tests
+*.bundle
+__pycache__
+.pytest_cache
+Dockerfile
+compose.yaml

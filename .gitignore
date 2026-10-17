@@ -10,3 +10,5 @@ backups/
 *.sqlite*
 *.db
 *.log
+.vercel/
+public/

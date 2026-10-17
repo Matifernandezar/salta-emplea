@@ -7,9 +7,19 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from . import domain
+from . import db, domain
 
 JOBICY_API = 'https://jobicy.com/api/v2/remote-jobs'
+TASK_LOCK_NAME = 'salta-emplea-tasks'
+
+
+class TaskBudgetExceeded(RuntimeError):
+    """La corrida conserva el trabajo confirmado y continúa en el próximo lote."""
+
+
+def _check_budget(deadline, required_seconds=0):
+    if deadline is not None and time.monotonic() + required_seconds >= deadline:
+        raise TaskBudgetExceeded('Presupuesto de ejecución agotado; trabajo pendiente conservado.')
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -49,7 +59,7 @@ def fetch_json(url):
         return json.loads(raw)
 
 
-def check_jobicy_status(conn, source, fetch=None):
+def check_jobicy_status(conn, source, fetch=None, *, deadline=None):
     """Solo un `closed` explícito archiva; unknown/errores solicitan revisión."""
     if not source['authorized'] or source['status'] != 'active' or source['url'] != JOBICY_API:
         raise ValueError('Fuente sin autorización o URL incompatible.')
@@ -65,11 +75,13 @@ def check_jobicy_status(conn, source, fetch=None):
     result = {'checked': 0, 'archived': 0, 'unknown': 0}
     if not candidates:
         return result
+    _check_budget(deadline, 20)
     data = (fetch or fetch_json)(JOBICY_API + '/status?ids=' + ','.join(str(x) for x in candidates))
     if not isinstance(data, dict) or not isinstance(data.get('jobs'), list):
         raise ValueError('Respuesta de estado incompatible.')
     answers = {item.get('id'): item.get('status') for item in data['jobs'] if isinstance(item, dict) and type(item.get('id')) is int}
     for provider_id, job_id in candidates.items():
+        _check_budget(deadline)
         status = answers.get(provider_id, 'unknown')
         if status == 'closed':
             domain.transition_job(conn, job_id, 'archive', 'recopilador_autorizado')
@@ -85,14 +97,16 @@ def check_jobicy_status(conn, source, fetch=None):
     return result
 
 
-def import_jobicy(conn, source, fetch=None):
+def import_jobicy(conn, source, fetch=None, *, deadline=None):
     if not source['authorized'] or source['status'] != 'active' or source['url'] != JOBICY_API:
         raise ValueError('Fuente sin autorización o URL incompatible.')
+    _check_budget(deadline, 20)
     payload = (fetch or fetch_json)(JOBICY_API + '?count=100')
     if not isinstance(payload, dict) or not isinstance(payload.get('jobs'), list):
         raise ValueError('Respuesta incompatible: no hay lista jobs.')
     result = {'received': len(payload['jobs']), 'eligible': 0, 'created': 0, 'duplicates': 0, 'invalid': 0}
     for row in payload['jobs'][:100]:
+        _check_budget(deadline)
         if not isinstance(row, dict) or not eligible_geo(row.get('jobGeo')):
             continue
         result['eligible'] += 1
@@ -125,8 +139,25 @@ def import_jobicy(conn, source, fetch=None):
 
 
 def run_tasks(conn, config, only=None):
+    """Ejecuta un lote bajo el mismo bloqueo para CLI y cron HTTP.
+
+    El lease es mayor que la duración máxima de la función de Vercel. Se toma
+    antes de recuperar task_runs para que una corrida concurrente jamás marque
+    como interrumpida a otra todavía en curso.
+    """
+    if only not in (None, 'collect', 'expire', 'mail'):
+        raise ValueError('Tarea desconocida.')
+    budget = max(1, min(int(config.get('TASK_BUDGET_SECONDS', 180)), 240))
+    deadline = time.monotonic() + budget
+    with db.task_lock(conn, TASK_LOCK_NAME, ttl_seconds=900) as acquired:
+        if not acquired:
+            return {'skipped': 'Ya hay una tarea en ejecución; se omite esta corrida.'}
+        return _run_locked_tasks(conn, config, only, deadline)
+
+
+def _run_locked_tasks(conn, config, only, deadline):
     from . import mailer
-    # El CLI sostiene flock exclusivo. Recuperar corridas que el proceso anterior dejó abiertas.
+    # Solo quien obtuvo el bloqueo puede recuperar una corrida interrumpida.
     with conn:
         conn.execute("UPDATE task_runs SET status='interrupted',finished_at=?,detail='Proceso anterior interrumpido; se recupera con operaciones idempotentes.' WHERE status='running'", (domain.now(),))
         run_id = conn.execute("INSERT INTO task_runs(task,started_at,status) VALUES (?,?,'running')", (only or 'all', domain.now())).lastrowid
@@ -134,17 +165,31 @@ def run_tasks(conn, config, only=None):
     try:
         if only in (None, 'collect'):
             result['sources'] = []
-            for row in conn.execute("SELECT * FROM sources WHERE status='active' AND authorized=1 AND method='jobicy'").fetchall():
+            source_limit = max(1, min(int(config.get('TASK_SOURCE_BATCH', 1)), 10))
+            processed = 0
+            for row in conn.execute("SELECT * FROM sources WHERE status='active' AND authorized=1 AND method='jobicy' ORDER BY COALESCE(last_run_at,''),id").fetchall():
+                _check_budget(deadline)
                 source = dict(row)
                 if source['last_run_at']:
                     due = datetime.fromisoformat(source['last_run_at']) + timedelta(hours=max(6, source['frequency_hours']))
                     if due > datetime.now(timezone.utc):
                         continue
+                if processed >= source_limit:
+                    result['sources_deferred'] = True
+                    break
+                processed += 1
                 try:
-                    outcome = import_jobicy(conn, source)
-                    outcome['status_check'] = check_jobicy_status(conn, source)
+                    _check_budget(deadline, 20)
+                    outcome = import_jobicy(conn, source, deadline=deadline)
+                    outcome['status_check'] = check_jobicy_status(conn, source, deadline=deadline)
                     message = json.dumps(outcome, ensure_ascii=False)
                     result['sources'].append({'id': source['id'], **outcome})
+                except TaskBudgetExceeded:
+                    # No retrasar por frecuencia una fuente que quedó a medias.
+                    # Repetir la recopilación recupera lo pendiente sin publicar.
+                    with conn:
+                        conn.execute('UPDATE sources SET last_result=? WHERE id=?', ('Lote interrumpido por tiempo; se retomará de forma idempotente.', source['id']))
+                    raise
                 except Exception as exc:
                     # Un fallo temporal nunca cierra ni vence las ofertas.
                     message = 'Revisar fuente: error temporal o respuesta incompatible (' + type(exc).__name__ + '). No se infiere cierre.'
@@ -154,15 +199,26 @@ def run_tasks(conn, config, only=None):
                 with conn:
                     conn.execute('UPDATE sources SET last_result=?,last_run_at=? WHERE id=?', (message, domain.now(), source['id']))
         if only in (None, 'expire'):
+            _check_budget(deadline)
             setting = conn.execute("SELECT value FROM settings WHERE key='review_days'").fetchone()
             result['expiration'] = domain.expire_jobs(conn, int(setting[0]) if setting else 30)
         if only in (None, 'mail'):
-            result['queue'] = mailer.queue_digests(conn, config.get('PUBLIC_BASE_URL', ''), config['SECRET_KEY']) if config.get('PUBLIC_BASE_URL') else {'skipped': 'PUBLIC_BASE_URL sin configurar'}
-            result['mail'] = mailer.send_outbox(conn, config)
+            _check_budget(deadline)
+            batch = max(1, min(int(config.get('TASK_MAIL_BATCH', 10)), 100))
+            result['queue'] = mailer.queue_digests(conn, config.get('PUBLIC_BASE_URL', ''), config['SECRET_KEY'], limit=batch, deadline=deadline) if config.get('PUBLIC_BASE_URL') else {'skipped': 'PUBLIC_BASE_URL sin configurar'}
+            result['mail'] = mailer.send_outbox(conn, config, limit=batch, deadline=deadline)
             failed = failed or result['mail'].get('errors', 0) > 0
+            if result['queue'].get('budget_exhausted') or result['mail'].get('budget_exhausted'):
+                result['budget_exhausted'] = True
+                failed = True
         with conn:
             conn.execute('DELETE FROM rate_limits WHERE CAST(reset_at AS INTEGER)<?', (int(time.time())-86400,))
             conn.execute('UPDATE task_runs SET status=?,finished_at=?,detail=? WHERE id=?', ('partial' if failed else 'succeeded', domain.now(), json.dumps(result, ensure_ascii=False), run_id))
+        return result
+    except TaskBudgetExceeded:
+        result['budget_exhausted'] = True
+        with conn:
+            conn.execute('UPDATE task_runs SET status=\'partial\',finished_at=?,detail=? WHERE id=?', (domain.now(), json.dumps(result, ensure_ascii=False), run_id))
         return result
     except Exception as exc:
         with conn:

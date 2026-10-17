@@ -1,6 +1,5 @@
 """Operación: python -m salta_emplea.cli --help."""
 import argparse
-import fcntl
 import getpass
 import json
 import os
@@ -21,7 +20,7 @@ def main():
     commands.add_parser('secret-key', help='Generar clave de sesión; guardar solo en entorno privado')
     tasks = commands.add_parser('tasks', help='Ejecutar tareas una vez, con bloqueo exclusivo')
     tasks.add_argument('--only', choices=['collect', 'expire', 'mail'])
-    backup = commands.add_parser('backup', help='Respaldo consistente mediante SQLite backup API')
+    backup = commands.add_parser('backup', help='Respaldo consistente de SQLite; PostgreSQL usa pg_dump')
     backup.add_argument('destination')
     forget = commands.add_parser('forget-email', help='Eliminar correo y registros asociados a pedido del titular')
     forget.add_argument('email')
@@ -40,7 +39,14 @@ def main():
         print(secrets.token_hex(32))
         return
     app = create_app()
-    conn = db.connect(app.config['DATABASE_PATH'])
+    database_target = app.config.get('DATABASE_TARGET') or app.config.get('DATABASE_URL') or app.config['DATABASE_PATH']
+    if args.command == 'init':
+        # Las migraciones PostgreSQL se ejecutan explícitamente, nunca al abrir
+        # una petición web ni como efecto secundario de una tarea programada.
+        db.init_db(database_target)
+    if args.command == 'backup' and db.is_postgres(database_target):
+        parser.error('Para PostgreSQL usá pg_dump o el respaldo del proveedor. El comando backup solo admite SQLite.')
+    conn = db.connect(database_target)
     try:
         if args.command == 'init':
             print('Base preparada. No se cargaron ofertas ni suscriptores.')
@@ -72,14 +78,9 @@ def main():
                 conn.execute("UPDATE outbox SET status=?,last_error='Conciliado manualmente con el proveedor.' WHERE id=? AND status='uncertain'", (args.result, args.id))
             print('Conciliación registrada. No se enviaron mensajes.')
         elif args.command == 'tasks':
-            lock_path = app.config['DATABASE_PATH'] + '.tasks.lock'
-            with open(lock_path, 'a') as lock:
-                try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    print('Ya hay una tarea en ejecución; se omite esta corrida.')
-                    return
-                print(json.dumps(run_tasks(conn, app.config, args.only), ensure_ascii=False))
+            # run_tasks comparte el mismo bloqueo con los cron HTTP y funciona
+            # tanto con SQLite local como con PostgreSQL administrado.
+            print(json.dumps(run_tasks(conn, app.config, args.only), ensure_ascii=False))
     finally:
         conn.close()
 

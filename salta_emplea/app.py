@@ -7,6 +7,7 @@ import logging
 import os
 import secrets
 import time
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
@@ -28,9 +29,12 @@ def create_app(config=None):
         SECRET_KEY=os.environ.get('SECRET_KEY'),
         ADMIN_PASSWORD_HASH=os.environ.get('ADMIN_PASSWORD_HASH', ''),
         DATABASE_PATH=os.environ.get('DATABASE_PATH', str(Path(app.instance_path) / 'salta.sqlite3')),
+        DATABASE_URL=os.environ.get('DATABASE_URL', ''),
+        SERVERLESS=os.environ.get('VERCEL') == '1',
+        CRON_SECRET=os.environ.get('CRON_SECRET', ''),
         UPLOAD_DIR=os.environ.get('UPLOAD_DIR', str(Path(app.instance_path) / 'uploads')),
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', ''),
-        APP_ENV=os.environ.get('APP_ENV', 'development'),
+        APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
@@ -39,6 +43,15 @@ def create_app(config=None):
     )
     if config:
         app.config.update(config)
+    app.config['DATABASE_TARGET'] = app.config['DATABASE_URL'] or app.config['DATABASE_PATH']
+    if app.config['SERVERLESS']:
+        if not db.is_postgres(app.config['DATABASE_TARGET']):
+            raise RuntimeError('Vercel requiere DATABASE_URL PostgreSQL persistente; SQLite local no está permitido.')
+        app.config['APP_ENV'] = 'production'
+        if not app.config['PUBLIC_BASE_URL']:
+            origin = os.environ.get('VERCEL_PROJECT_PRODUCTION_URL', '')
+            if origin and '/' not in origin and '.' in origin:
+                app.config['PUBLIC_BASE_URL'] = 'https://' + origin
     app.config['APP_ENV'] = str(app.config['APP_ENV']).lower()
     production = app.config['APP_ENV'] == 'production'
     if not app.config['SECRET_KEY']:
@@ -52,13 +65,14 @@ def create_app(config=None):
     app.config['SESSION_COOKIE_SECURE'] = production
     if os.environ.get('TRUST_PROXY') == '1':
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-    Path(app.config['DATABASE_PATH']).parent.mkdir(parents=True, exist_ok=True)
-    Path(app.config['UPLOAD_DIR']).mkdir(parents=True, exist_ok=True)
-    db.init_db(app.config['DATABASE_PATH'])
+    if not db.is_postgres(app.config['DATABASE_TARGET']):
+        Path(app.config['DATABASE_PATH']).parent.mkdir(parents=True, exist_ok=True)
+        Path(app.config['UPLOAD_DIR']).mkdir(parents=True, exist_ok=True)
+        db.init_db(app.config['DATABASE_PATH'])
 
     def connection():
         if 'db' not in g:
-            g.db = db.connect(app.config['DATABASE_PATH'])
+            g.db = db.connect(app.config['DATABASE_TARGET'])
         return g.db
 
     @app.teardown_appcontext
@@ -121,7 +135,7 @@ def create_app(config=None):
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         if production:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'
-        if request.path.startswith('/admin') or request.path.startswith('/alertas/'):
+        if request.path.startswith(('/admin', '/alertas/', '/api/cron/')):
             response.headers['Cache-Control'] = 'no-store'
             response.headers['Referrer-Policy'] = 'no-referrer'
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
@@ -212,7 +226,13 @@ def create_app(config=None):
                 img.load()
                 img.thumbnail((2400, 2400))
                 name = secrets.token_hex(24) + '.jpg'
-                img.convert('RGB').save(Path(app.config['UPLOAD_DIR']) / name, 'JPEG', quality=85)
+                if db.is_postgres(app.config['DATABASE_TARGET']):
+                    image_bytes = BytesIO()
+                    img.convert('RGB').save(image_bytes, 'JPEG', quality=80)
+                    with connection():
+                        connection().execute('INSERT INTO uploads(name,data,created_at) VALUES (?,?,?)', (name, image_bytes.getvalue(), domain.now()))
+                else:
+                    img.convert('RGB').save(Path(app.config['UPLOAD_DIR']) / name, 'JPEG', quality=85)
                 return name
         except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
             raise ValueError('No se pudo leer la imagen. Usá JPG, PNG o WEBP.') from exc
@@ -327,6 +347,11 @@ def create_app(config=None):
         row = connection().execute('SELECT image_path FROM jobs WHERE id=?', (job_id,)).fetchone()
         if not row or not row['image_path']:
             abort(404)
+        if db.is_postgres(app.config['DATABASE_TARGET']):
+            upload = connection().execute('SELECT data FROM uploads WHERE name=?', (row['image_path'],)).fetchone()
+            if not upload:
+                abort(404)
+            return send_file(BytesIO(bytes(upload['data'])), mimetype='image/jpeg')
         path = Path(app.config['UPLOAD_DIR']) / Path(row['image_path']).name
         if not path.is_file():
             abort(404)
@@ -481,6 +506,20 @@ def create_app(config=None):
     def health():
         connection().execute('SELECT 1')
         return {'status': 'ok'}
+
+    @app.get('/api/cron/<task>')
+    def cron(task):
+        if task not in ('collect', 'expire', 'mail'):
+            abort(404)
+        secret = app.config['CRON_SECRET']
+        supplied = request.headers.get('Authorization', '')
+        if not secret or not hmac.compare_digest(supplied.encode(), ('Bearer ' + secret).encode()):
+            abort(401)
+        from .tasks import run_tasks
+        result = run_tasks(connection(), app.config, only=task)
+        response = app.json.response(result)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @app.errorhandler(400)
     @app.errorhandler(404)
