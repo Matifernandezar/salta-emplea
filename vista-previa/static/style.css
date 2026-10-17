@@ -2234,4 +2234,4 @@ td:first-child {
   }
 }
 
-.preview-banner{margin:0;border-radius:0;border-width:0 0 1px;font-size:.8rem;padding:12px 0}.preview-banner .container{max-width:1160px}
+.preview-banner{margin:0;border-radius:0;border-width:0 0 1px;font-size:.8rem;padding:12px 0}.preview-banner .container{max-width:1160px}.search-panel :disabled{cursor:default}.search-panel button:disabled{opacity:.7}

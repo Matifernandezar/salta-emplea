@@ -26,15 +26,20 @@ def main():
         banner = '<div class="notice preview-banner" role="note"><div class="container"><strong>Versión preliminar.</strong> Estamos preparando las primeras ofertas. Las alertas y el envío de avisos estarán disponibles en la próxima etapa.</div></div>'
 
         def save(path, html):
+            html = html.replace('<form class="search-panel" method="get" action="/">', '<div class="search-panel" aria-label="Buscador disponible próximamente">').replace('</form>', '</div>')
+            html = html.replace('<input ', '<input disabled ').replace('<select ', '<select disabled ').replace('<button ', '<button disabled ')
+            html = html.replace('Buscar ofertas <span', 'Próximamente <span')
+            html = html.replace('Las ofertas remotas deben aceptar postulantes residentes en Salta.', 'El buscador se habilitará al publicar las primeras ofertas.')
             html = html.replace('<main id="contenido">', '<main id="contenido">' + banner)
             html = html.replace('Recibir alertas', 'Alertas · próximamente').replace('Compartir una oferta', 'Publicar · próximamente')
             html = html.replace('Crear mi alerta', 'Conocer las alertas').replace('Avisame cuando haya oportunidades', 'Ver próximas funciones')
             html = html.replace('Suscripción voluntaria y baja sencilla.', 'Disponible en la próxima etapa, con confirmación y baja sencilla.')
             html = html.replace('Panel de administración', 'Administración · próximamente')
+            html = html.replace('Aportar una oferta', 'Aportar · próximamente').replace('Compartí el enlace, el texto o una imagen. La revisamos antes de publicarla.', 'Pronto podrás compartir enlaces, textos e imágenes para su revisión.')
             html = html.replace('Para pedir una corrección o el retiro de un aviso, usá “Reportar un problema” en la oferta.', 'Cada oferta contará con una opción para reportar errores o solicitar su retiro.')
             output = destination / path / 'index.html' if path else destination / 'index.html'
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(html, encoding='utf-8')
+            output.write_text('\n'.join(line.rstrip() for line in html.splitlines()) + '\n', encoding='utf-8')
 
         save('', app.test_client().get('/').get_data(as_text=True))
         pages = {
@@ -48,7 +53,7 @@ def main():
             with app.test_request_context('/' + path):
                 save(path, render_template('message.html', title=title, message=message))
     with (destination / 'static/style.css').open('a') as output:
-        output.write('\n.preview-banner{margin:0;border-radius:0;border-width:0 0 1px;font-size:.8rem;padding:12px 0}.preview-banner .container{max-width:1160px}\n')
+        output.write('\n.preview-banner{margin:0;border-radius:0;border-width:0 0 1px;font-size:.8rem;padding:12px 0}.preview-banner .container{max-width:1160px}.search-panel :disabled{cursor:default}.search-panel button:disabled{opacity:.7}\n')
     print('Vista preliminar generada: 6 páginas, sin ofertas ni formularios de envío.')
 
 
