@@ -45,7 +45,9 @@ Consulta: **18 de octubre de 2026**. Valores de lista en USD para `DOCUMENT_TEXT
 
 Google prorratea el último bloque. Por ejemplo, 1500 unidades de esta función costarían USD 0,75 si las primeras 1000 gratuitas están disponibles y no hay otros cargos. El cupo gratuito **no es una reserva exclusiva para Salta Emplea**: otras aplicaciones y usos dentro del ámbito de facturación del proveedor pueden consumirlo. Impuestos, conversión de moneda y otros servicios de Google Cloud pueden sumar cargos.
 
-El límite local de 100 intentos mensuales reduce el uso de esta aplicación, pero no garantiza una factura de USD 0 ni controla otras claves o aplicaciones. Los intentos reservados y los posibles cargos reales del proveedor son conceptos diferentes. Conviene revisar también cuotas, consumo y alertas desde Google Cloud.
+El límite local configurado de 999 intentos mensuales reduce el uso de esta aplicación, pero no garantiza una factura de USD 0 ni controla otras claves o aplicaciones. Los intentos reservados y los posibles cargos reales del proveedor son conceptos diferentes. Conviene revisar también cuotas, consumo y alertas desde Google Cloud.
+
+La tabla de Vision no establece una cuota mensual de USD 30. Por separado, Google indica que algunas cuentas de Cloud Billing y formas de pago requieren un **anticipo único para activar la cuenta**, variable según país y moneda; el saldo no usado se devuelve al cerrar esa cuenta, según sus condiciones. Esto no permite identificar el importe que ve el titular sin comprobar el texto de su pantalla. No confundir ese anticipo con una autorización temporal de tarjeta ni con créditos de Gemini/AI Studio. Revisar la sección de anticipos de la [documentación oficial de pagos](https://docs.cloud.google.com/billing/docs/how-to/payment-methods) antes de decidir cualquier pago. El asistente no activó una contratación ni realizó pagos.
 
 ## Resolver un rechazo de Google
 

@@ -8,7 +8,11 @@ La captura posterior del titular mostró `credentials_rejected`. El adaptador an
 
 Se agregaron diagnósticos a partir de razones oficiales de una lista cerrada, sin guardar mensajes, claves, proyectos ni URLs del proveedor. Se permite solicitar un reintento explícito únicamente tras rechazo de acceso; queda ligado al fallo, imagen y hash, requiere administrador, CSRF y reconocimiento de configuración, admite tres intentos por imagen y conserva el cupo y el historial. Resultados inciertos y lecturas completadas continúan bloqueados. La búsqueda del historial ahora filtra el archivo antes de limitar filas para no olvidar reservas antiguas.
 
-La validación con proveedores sustituidos y el despliegue de esta corrección se registran al completarse. No se hizo una nueva llamada real a Google ni se aprobó contenido en producción durante el diagnóstico.
+La [suite con PostgreSQL 17](https://github.com/Matifernandezar/salta-emplea/actions/runs/39110101136), commit `1743c5e`, pasó **485 pruebas sin omisiones en 20,91 segundos**. Incluyó diagnóstico seguro, reintento explícito, cupo persistente, exclusión concurrente y rechazo de formularios antiguos. Localmente pasaron 476 pruebas y se omitieron nueve por no disponer de PostgreSQL de pruebas.
+
+El [circuito en Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39110101159) pasó en 390 × 844 y 1440 × 1000: imagen privada, rechazo sustituido, reintento manual con ambos consentimientos, preparación pendiente, aprobación e idempotencia. También pasó la comprobación pública de solo lectura. El proveedor OCR fue sustituido: esto no acredita una lectura real con Google.
+
+Vercel publicó `1743c5e` como `dpl_DYhr2cYpcfsGsAtHvLcQx8yBQvLo`, READY; `/salud` respondió HTTP 200 con consulta SQL correcta. No se hizo una nueva llamada real a Google ni se aprobó contenido en producción durante el diagnóstico. La causa exacta del rechazo y una lectura real exitosa siguen pendientes de la configuración del titular. La documentación distingue el precio por uso de Vision de un posible anticipo de activación de la cuenta, cuyo importe no se comprobó en su pantalla. No se contrató ni pagó ningún servicio.
 
 ## Fuentes elegidas y preparación de imágenes — 18/10/2026
 
