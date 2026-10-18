@@ -19,6 +19,8 @@ Estas variables no sustituyen `DATABASE_URL` ni configuran el proveedor de corre
 
 ## Verificación del desarrollo
 
+Comprobación real aprobada el 18/10/2026 en [GitHub Actions](https://github.com/Matifernandezar/salta-emplea/actions/runs/39099346331), tanto para el archivo local como para la página HTTPS publicada. Se usaron valores ficticios, sin capturas del configurador ni registro de sus resultados.
+
 `scripts/browser_check.py` incluye `check_access_helper(browser)` para comprobar el archivo en Chromium, sin servidor ni solicitudes externas. Usa exclusivamente una contraseña ficticia marcada `PRUEBA`, verifica el hash con Werkzeug y repite la generación para comprobar que cambian las claves y la sal. No imprime resultados secretos ni toma capturas de esta herramienta.
 
 La política de seguridad incorporada autoriza únicamente los hashes del CSS y JavaScript de este archivo. Si modificás esos bloques, recalculá sus hashes SHA-256 en base64 y actualizá la etiqueta `Content-Security-Policy` antes de repetir la prueba en navegador.
