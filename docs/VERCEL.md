@@ -18,12 +18,14 @@ La configuración de la raíz del repositorio corresponde al backend futuro; el 
 
 El titular creó [Matifernandezar/salta-emplea](https://github.com/Matifernandezar/salta-emplea). El repositorio se creó público y se conservó esa visibilidad. El código y los commits en español se subieron a main, sin secretos, bases ni imágenes privadas. La vinculación con Vercel y la publicación estática están verificadas. No se modificó otro repositorio.
 
-La consulta inicial de integraciones de almacenamiento recibió **403 forbidden**. No hay una credencial PostgreSQL de producción configurada; no se reutilizaron secretos de otras aplicaciones. Esto no impide servir la publicación estática actual.
+El titular vinculó Neon el 18/10/2026. La consulta de metadatos confirma `DATABASE_URL` y otras variables de conexión como Secret. Se limitaron a Production para que los despliegues de prueba no reciban acceso a la base real. También están configurados `PUBLIC_BASE_URL` y `APP_ENV`. No se leyeron ni mostraron valores secretos. Esto confirma configuración presente, no una conexión SQL comprobada ni una migración ejecutada.
+
+Faltan las claves de sesión, administrador y tareas. El [configurador local](CONFIGURAR-ACCESO.md) permite que el titular elija su contraseña y genere los valores dentro de su navegador, para guardarlos directamente como Secret en Vercel. El backend continúa sin activarse hasta completar la configuración y verificar el despliegue.
 
 ## Configuración preparada para el backend
 
 - `.python-version` fija Python 3.12; `wsgi.py` exporta la aplicación Flask.
-- `vercel.json` prepara cron de vencimientos cada hora, recopilación cada seis horas y correo cada quince minutos. Consultar el plan necesario en VERCEL-COSTOS.md. Los cron solo quedan activos cuando existe despliegue de producción.
+- `vercel.json` prepara la activación inicial del circuito editorial manual, sin programaciones. Los botones privados de Automatización siguen disponibles cuando se active el backend. `deploy/vercel-programado.json` conserva la propuesta de cron por hora, cada seis horas y cada quince minutos, pendiente de verificar plan y costos antes de habilitarla. No se contrató ni cambió ningún plan.
 - `scripts/prepare_vercel.py` copia el CSS a `public/static` y aplica migraciones PostgreSQL vacías e idempotentes. Requiere conexión configurada antes del build.
 - `DATABASE_URL` selecciona PostgreSQL y desactiva la creación de archivos locales. En Vercel es obligatoria. Nunca usar un archivo bajo `/tmp` como base permanente.
 - Las imágenes se redecodifican y guardan en PostgreSQL; la ruta de descarga sigue siendo privada. Las copias de PostgreSQL deben incluir esa tabla.

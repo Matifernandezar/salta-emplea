@@ -18,6 +18,8 @@ La suite ampliada pasó **265 pruebas con PostgreSQL 17 real en GitHub Actions**
 
 Antes de activar el backend, ejecutar `.venv/bin/python -m salta_emplea.cli check-production --with-crons`. El diagnóstico funciona con configuración incompleta y muestra nombres y estados, sin secretos. Agregar `--check-database` únicamente al comprobar explícitamente el acceso y esquema de la base: consulta en modo de solo lectura y no aplica migraciones ni envía correo.
 
+La conexión Neon ya figura en Production. El titular puede [preparar el acceso privado](https://salta-emplea.vercel.app/configurar-acceso) y guardar las tres variables generadas directamente en Vercel; la contraseña se elige y procesa en su propio navegador. Ver [instrucciones](docs/CONFIGURAR-ACCESO.md). La configuración principal no habilita cron automáticamente; la propuesta programada permanece en `deploy/vercel-programado.json` hasta validar plan, costos y funcionamiento.
+
 ## Instalación local
 
 Requiere Python 3.12 o posterior y Linux para el bloqueo del trabajador.

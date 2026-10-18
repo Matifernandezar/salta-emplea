@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'none'; img-src 'none'; object-src 'none'; form-action 'none'; style-src 'sha256-xK+YIZSnmpIPQIDvHAEfd8zXe+NevCz3Xpp7mfOsLqs='; script-src 'sha256-POSECxNgkLcqCrW2+iek+cjgLk6LWW1F8U8F9hiW6Qk='">
+  <title>Configurar acceso privado — Salta Emplea</title>
+  <style>
+    :root { color-scheme: light; font: 100%/1.6 system-ui, sans-serif; color: #173147; background: #f4f7f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 1rem; }
+    main { max-width: 45rem; margin: 2rem auto; background: white; padding: clamp(1rem, 4vw, 2.5rem); border-radius: .8rem; }
+    h1 { font-size: clamp(1.6rem, 5vw, 2rem); line-height: 1.2; }
+    label { display: block; font-weight: 650; margin-top: 1.2rem; }
+    input, textarea, button { font: inherit; max-width: 100%; }
+    input, textarea { display: block; width: 100%; padding: .65rem; border: 1px solid #697d89; border-radius: .3rem; }
+    textarea { font-family: ui-monospace, monospace; font-size: .9rem; overflow-wrap: anywhere; }
+    button { background: #14685f; color: white; border: 0; border-radius: .3rem; padding: .7rem 1rem; margin-top: .7rem; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .65; }
+    a { color: #0c605c; text-underline-offset: .2em; }
+    :focus-visible { outline: 3px solid #176ec0; outline-offset: 3px; }
+    small { display: block; }
+    .notice { border-left: .3rem solid #14685f; padding: .5rem 1rem; background: #eef7f5; }
+    [role="status"] { min-height: 1.6em; font-weight: 650; }
+    [hidden] { display: none; }
+    code { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<main>
+  <p>Salta Emplea · Configuración privada</p>
+  <h1>Prepará el acceso al panel</h1>
+  <p class="notice">Esta herramienta funciona dentro de este archivo. No envía tu contraseña ni las claves a ningún servidor y no las guarda.</p>
+  <p>Elegí una contraseña exclusiva de al menos 12 caracteres. Guardala en tu gestor de contraseñas: será la que uses para entrar al panel.</p>
+  <noscript>Necesitás habilitar JavaScript en este archivo para generar las claves de forma local.</noscript>
+  <form id="generator" autocomplete="off">
+    <label for="password">Contraseña del administrador</label>
+    <input id="password" type="password" minlength="12" required autocomplete="off" aria-describedby="password-help">
+    <small id="password-help">Usá una frase larga y única. La contraseña no aparecerá entre los resultados.</small>
+    <label for="confirmation">Repetí la contraseña</label>
+    <input id="confirmation" type="password" minlength="12" required autocomplete="off">
+    <button id="generate" type="submit">Generar configuración privada</button>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+  <section id="results" hidden aria-labelledby="results-heading">
+    <h2 id="results-heading">Copiá estos tres valores a Vercel</h2>
+    <p>Abrí las <a href="https://vercel.com/matias-projects-2dbf9656/salta-emplea/settings/environment-variables" target="_blank" rel="noopener noreferrer">variables de entorno de Salta Emplea</a>. Para cada nombre, pegá su valor, elegí <strong>Production</strong> y guardalo como <strong>Secret / Sensitive</strong>.</p>
+    <p>No pegues estos valores en el chat, en GitHub ni en un documento compartido. Cada botón selecciona el valor: copiá con Ctrl+C o con la opción Copiar de tu celular.</p>
+    <label for="secret">SECRET_KEY</label>
+    <textarea id="secret" rows="2" readonly spellcheck="false" autocomplete="off"></textarea>
+    <button type="button" data-select="secret">Seleccionar SECRET_KEY</button>
+    <label for="hash">ADMIN_PASSWORD_HASH</label>
+    <textarea id="hash" rows="4" readonly spellcheck="false" autocomplete="off"></textarea>
+    <button type="button" data-select="hash">Seleccionar ADMIN_PASSWORD_HASH</button>
+    <label for="cron">CRON_SECRET</label>
+    <textarea id="cron" rows="2" readonly spellcheck="false" autocomplete="off"></textarea>
+    <button type="button" data-select="cron">Seleccionar CRON_SECRET</button>
+    <p>Las claves aparecen únicamente en esta pestaña. Al cerrarla se pierde esta configuración local. Si generás otra, los tres valores cambiarán: no reemplaces claves de una app activa sin coordinarlo antes.</p>
+  </section>
+</main>
+<script>
+  'use strict';
+  const form = document.getElementById('generator');
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+  const generate = document.getElementById('generate');
+  const passwordInput = document.getElementById('password');
+  const confirmation = document.getElementById('confirmation');
+  const outputIds = ['secret', 'hash', 'cron'];
+  const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  const randomHex = size => hex(crypto.getRandomValues(new Uint8Array(size)));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    results.hidden = true;
+    outputIds.forEach(id => { document.getElementById(id).value = ''; });
+    let password = passwordInput.value;
+    if ([...password].length < 12 || password !== confirmation.value) {
+      status.textContent = 'Ingresá al menos 12 caracteres y repetí la misma contraseña.';
+      return;
+    }
+    if (!globalThis.crypto?.subtle) {
+      status.textContent = 'Este navegador no ofrece WebCrypto. Abrí el archivo con una versión actual de Chrome, Edge o Firefox.';
+      return;
+    }
+    generate.disabled = true;
+    status.textContent = 'Preparando las claves en este navegador…';
+    try {
+      const salt = randomHex(16);
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const digest = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 1000000 }, key, 256);
+      document.getElementById('secret').value = randomHex(32);
+      document.getElementById('hash').value = `pbkdf2:sha256:1000000$${salt}$${hex(new Uint8Array(digest))}`;
+      document.getElementById('cron').value = randomHex(32);
+      results.hidden = false;
+      status.textContent = 'Configuración lista. Copiá los tres valores a Vercel y cerrá esta pestaña.';
+    } catch {
+      outputIds.forEach(id => { document.getElementById(id).value = ''; });
+      status.textContent = 'No se pudo generar la configuración. Volvé a intentarlo en un navegador actualizado.';
+    } finally {
+      password = '';
+      passwordInput.value = '';
+      confirmation.value = '';
+      generate.disabled = false;
+    }
+  });
+  document.querySelectorAll('[data-select]').forEach(button => {
+    button.addEventListener('click', () => {
+      const field = document.getElementById(button.dataset.select);
+      field.focus();
+      field.select();
+      field.setSelectionRange(0, field.value.length);
+    });
+  });
+</script>
+</body>
+</html>

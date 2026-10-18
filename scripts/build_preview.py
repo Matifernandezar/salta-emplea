@@ -54,7 +54,10 @@ def main():
                 save(path, render_template('message.html', title=title, message=message))
     with (destination / 'static/style.css').open('a') as output:
         output.write('\n.preview-banner{margin:0;border-radius:0;border-width:0 0 1px;font-size:.8rem;padding:12px 0}.preview-banner .container{max-width:1160px}.search-panel :disabled{cursor:default}.search-panel button:disabled{opacity:.7}\n')
-    print('Vista preliminar generada: 6 páginas, sin ofertas ni formularios de envío.')
+    helper = destination / 'configurar-acceso'
+    helper.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'instalacion/configurar-acceso.html', helper / 'index.html')
+    print('Vista preliminar generada: 6 páginas y un configurador local, sin formularios de envío.')
 
 
 if __name__ == '__main__':

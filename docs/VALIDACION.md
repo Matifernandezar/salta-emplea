@@ -1,5 +1,13 @@
 # Resultado por fase
 
+## Vinculación de Neon y preparación del acceso — 18/10/2026
+
+El titular agregó Neon. La consulta de metadatos confirmó 18 variables de conexión, incluida `DATABASE_URL`, como Secret. Se restringieron de Preview+Production a Production y se verificó el cambio sin leer sus valores. Se configuraron también el origen público y el entorno de producción. Aún no se comprobó conexión SQL ni se aplicaron migraciones a la base del titular.
+
+Se preparó un configurador estático y sin dependencias externas para que el titular elija la contraseña y genere tres variables dentro de su navegador. Usa WebCrypto, PBKDF2 y una política CSP por hashes; no envía ni guarda los valores, y no se capturan ni imprimen sus resultados. Se agrega su comprobación con contraseña ficticia a Chromium. La ejecución real de esta ampliación debe verificarse en Actions antes de entregarla como operativa.
+
+La configuración principal del backend queda sin cron para activar primero el circuito manual sin cambiar ni contratar planes. La propuesta de programación se conserva en un archivo separado. Fuentes, correo y avisos siguen sin habilitarse en producción; el proyecto continúa sirviendo la vista preliminar hasta completar las claves privadas.
+
 ## Verificaciones reproducibles de fuente y navegador — 18/10/2026
 
 Se agregaron workflows separados para consultar Jobicy en una base temporal exclusiva y probar el circuito editorial en Chromium, tanto en celular como escritorio. El primero comprueba el historial antes de hacer una consulta: respeta una ventana conservadora de al menos una hora, omite corridas si hay otra sin terminar y rechaza la consulta cuando no puede comprobar la frecuencia. Importa dos veces el mismo payload cacheado, verifica datos y aprobación obligatoria, consulta estado una vez cuando corresponde y elimina la base de ensayo. El documento oficial se registra como evidencia para revisión humana, sin conceder permisos automáticamente. Ninguna fuente de producción se habilita.

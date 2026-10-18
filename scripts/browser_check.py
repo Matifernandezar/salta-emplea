@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from playwright.sync_api import expect, sync_playwright
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
 from salta_emplea import db
@@ -193,6 +193,48 @@ def run_circuit(browser, viewport):
             context.close()
 
 
+def check_access_helper(browser, target=None):
+    """Archivo local, contraseña PRUEBA; nunca imprime ni captura los resultados."""
+    import re
+    target = target or (ROOT / 'instalacion/configurar-acceso.html').as_uri()
+    context = browser.new_context(viewport={'width': 390, 'height': 844})
+    unexpected = []
+    context.route('**/*', lambda route: route.continue_() if route.request.url == target
+                  else (unexpected.append(urlsplit(route.request.url).hostname), route.abort()))
+    try:
+        page = context.new_page()
+        page.goto(target)
+        assert page.evaluate('isSecureContext && Boolean(crypto.subtle)')
+        assert page.locator('#results').is_hidden()
+        assert all(page.locator(f'#{field}').input_value() == '' for field in ('secret', 'hash', 'cron'))
+        page.locator('#password').fill(PASSWORD)
+        page.locator('#confirmation').fill(PASSWORD + '-diferente')
+        page.get_by_role('button', name='Generar configuración privada').click()
+        expect(page.locator('#results')).to_be_hidden()
+        expect(page.get_by_role('status')).to_contain_text('repetí la misma contraseña')
+        outputs = []
+        for _ in range(2):
+            page.locator('#password').fill(PASSWORD)
+            page.locator('#confirmation').fill(PASSWORD)
+            page.get_by_role('button', name='Generar configuración privada').click()
+            expect(page.locator('#results')).to_be_visible(timeout=15000)
+            values = {field: page.locator(f'#{field}').input_value() for field in ('secret', 'hash', 'cron')}
+            assert all(re.fullmatch(r'[0-9a-f]{64}', values[field]) for field in ('secret', 'cron'))
+            assert re.fullmatch(r'pbkdf2:sha256:1000000\$[0-9a-f]{32}\$[0-9a-f]{64}', values['hash'])
+            assert check_password_hash(values['hash'], PASSWORD)
+            assert page.locator('#password').input_value() == page.locator('#confirmation').input_value() == ''
+            assert values['secret'] != values['cron']
+            outputs.append(values)
+            no_horizontal_overflow(page)
+        assert all(outputs[0][field] != outputs[1][field] for field in ('secret', 'hash', 'cron'))
+        assert outputs[0]['hash'].split('$')[1] != outputs[1]['hash'].split('$')[1]
+        assert page.evaluate("async () => { try { await fetch('https://example.test/bloqueado'); return false; } catch { return true; } }")
+        assert not unexpected
+        print('APROBADO: helper local, PBKDF2 compatible, claves distintas, sin red ni captura.')
+    finally:
+        context.close()
+
+
 def check_public(browser):
     """Solo lectura, sin cookies/credenciales; una falla externa no invalida QA local."""
     for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
@@ -224,8 +266,10 @@ def main():
         try:
             for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
                 run_circuit(browser, viewport)
+            check_access_helper(browser)
             if args.check_public:
                 check_public(browser)
+                check_access_helper(browser, 'https://salta-emplea.vercel.app/configurar-acceso')
         finally:
             browser.close()
 
