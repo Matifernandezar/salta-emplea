@@ -1,10 +1,10 @@
 # Guía simple de administración
 
-Para GitHub/Vercel, seguir primero VERCEL.md: la persistencia usa PostgreSQL y los cron de la plataforma. SQLite, archivos locales y cron del servidor descritos abajo siguen siendo la alternativa para desarrollo o servidor propio. En PostgreSQL las imágenes privadas están en la base, y el bloqueo de tareas es un lease compartido. `DATABASE_URL` selecciona ese modo; el comando de respaldo SQLite no se aplica a PostgreSQL.
+El sitio activo es https://salta-emplea.vercel.app. Para GitHub/Vercel, seguir primero VERCEL.md: la persistencia usa PostgreSQL y las tareas se ejecutan manualmente desde el panel hasta habilitar un programador. SQLite, archivos locales y cron del servidor descritos abajo siguen siendo la alternativa para desarrollo o servidor propio. En PostgreSQL las imágenes privadas están en la base, y el bloqueo de tareas es un lease compartido. `DATABASE_URL` selecciona ese modo; el comando de respaldo SQLite no se aplica a PostgreSQL.
 
 ## Entrar y publicar la primera oferta
 
-1. Instalar según el README, generar clave y hash de contraseña y guardarlos en `.env`. Sin hash no se puede ingresar al panel. No hay contraseña de fábrica.
+1. En el sitio publicado, abrir https://salta-emplea.vercel.app/admin/ingresar y usar la contraseña elegida al preparar el acceso privado. No hay contraseña de fábrica. Para instalar otra copia local, seguir el README y configurar su propio `.env`.
 2. Abrir `/admin/ingresar`. Entrar y elegir **Incorporar oferta**. También podés recibir aportes desde `/publicar`, sin cuentas públicas.
 3. Copiar el enlace, el texto original o una imagen JPG/PNG/WEBP. Completar solo datos respaldados por la fuente. Un aporte solo con enlace o imagen queda con un título interno pendiente; ese título no se puede publicar.
 4. Comparar **Aviso original** y **Versión preparada**. Transcribir el puesto y revisar contacto, empresa, condiciones, residencia compatible con Salta y fechas. Las imágenes son privadas y requieren transcripción humana: no hay OCR conectado. Los datos inciertos se enumeran para revisión.
@@ -30,7 +30,7 @@ La base inicial no trae fuentes habilitadas. Ver `FUENTES.md` antes de dar de al
 
 - Registrar nombre, URL, método, frecuencia y URL de condiciones. Marcar autorización únicamente después de revisarla. Se puede deshabilitar cada fuente desde su formulario.
 - El método **manual** es un registro de seguimiento: no simula una consulta automática. Usar Incorporar oferta.
-- El adaptador **Jobicy** acepta únicamente su URL oficial. Está probado con fixtures; falta verificar acceso real. No habilitarlo hasta completar esa prueba. Retiene atribución y URL original, importa hasta 100 resultados por pasada y no recorre paginación: no promete cobertura total. Solo considera geografías explícitas compatibles y exige revisión humana de residencia y zona horaria.
+- El adaptador **Jobicy** acepta únicamente su URL oficial. Pasó la comprobación real aislada documentada en FUENTES.md. Eso no habilita la fuente en producción: revisar condiciones y autorización antes de activarla. Retiene atribución y URL original, importa hasta 100 resultados por pasada y no recorre paginación: no promete cobertura total. Solo considera geografías explícitas compatibles y exige revisión humana de residencia y zona horaria.
 - La frecuencia mínima implementada es seis horas. Un error se registra y se vuelve a intentar en la próxima ventana configurada. La consulta de estados revisa hasta 100 avisos almacenados, priorizando la comprobación más antigua. Conserva identificación de la fuente en el original recibido.
 
 No ingresar credenciales en textos de avisos. No ejecutar instrucciones incluidas en contenido externo. No usar scraping para fuentes restringidas ni sesiones de terceros.
@@ -55,7 +55,7 @@ Abrir **Automatización** en el panel privado. La pantalla muestra la base consu
 
 Los botones **Recopilar ofertas**, **Comprobar vigencia** y **Procesar correos** ejecutan un lote por acción. Requieren sesión y formulario vigente. Admiten seis intentos cada diez minutos, hasta una fuente por frecuencia y tres correos por lote manual, con presupuesto de un minuto. Si otra tarea ya está en curso, se omite la nueva. No habilitan fuentes ni aprueban ofertas. Sin configuración de correo los mensajes quedan pendientes, sin enviarse.
 
-Como alternativa, ejecutar una corrida con `python -m salta_emplea.cli tasks`. `--only collect`, `--only expire` y `--only mail` permiten aislar etapas. El código del backend prepara cron de Vercel; en un servidor propio hay que instalar el cron correspondiente. Hay exclusión compartida por archivo en SQLite o lease en PostgreSQL, transacciones, claves únicas, historial de corridas y reintentos de correo acotados. Un reinicio marca corridas inconclusas como interrumpidas y recupera el procesamiento idempotente. Estos mecanismos solo operan donde esté ejecutándose el backend, no en la publicación preliminar estática.
+Como alternativa, ejecutar una corrida con `python -m salta_emplea.cli tasks`. `--only collect`, `--only expire` y `--only mail` permiten aislar etapas. El código del backend prepara cron de Vercel; en un servidor propio hay que instalar el cron correspondiente. Hay exclusión compartida por archivo en SQLite o lease en PostgreSQL, transacciones, claves únicas, historial de corridas y reintentos de correo acotados. Un reinicio marca corridas inconclusas como interrumpidas y recupera el procesamiento idempotente. El backend activo incluye estos mecanismos; los lotes del panel requieren una acción explícita y no instalan un programador.
 
 Antes del despliegue, `python -m salta_emplea.cli check-production --with-crons` valida la configuración local sin mostrar valores ni abrir conexiones. `--check-database` agrega una comprobación explícita del acceso, las tablas y la versión usando solo lectura. Un diagnóstico correcto no verifica entregas de correo, programación de tareas ni tráfico real.
 

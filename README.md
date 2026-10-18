@@ -2,23 +2,25 @@
 
 Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio gratuito, sin cuentas para candidatos, CV ni pagos. HTML liviano y Flask; PostgreSQL para Vercel y SQLite para desarrollo local. Los avisos entran pendientes y requieren aprobación del administrador; editar una publicación revoca su aprobación.
 
-## Página pública preliminar
+## Sitio publicado
 
-[Abrir Salta Emplea](https://salta-emplea.vercel.app). Vercel publica la carpeta `vista-previa/` desde este [repositorio de GitHub](https://github.com/Matifernandezar/salta-emplea). El inicio, cinco páginas informativas y los estilos responden HTTP 200 sin iniciar sesión, comprobado el 18/10/2026. La página está identificada como preliminar y comienza sin ofertas ficticias.
+[Abrir Salta Emplea](https://salta-emplea.vercel.app) · [Ingresar al panel](https://salta-emplea.vercel.app/admin/ingresar) · [Guía de administración](docs/OPERACION.md).
 
-La búsqueda, el envío de avisos, el panel y las alertas todavía no están habilitados en esta publicación estática. Sus pantallas indican que estarán disponibles en una próxima etapa. No recibe postulaciones ni suscripciones, y no ejecuta tareas automáticas.
+Desde el 18/10/2026 Vercel ejecuta la aplicación Flask desde la raíz de este [repositorio](https://github.com/Matifernandezar/salta-emplea), con PostgreSQL de Neon. El build aplicó migraciones sin datos de prueba y `/salud` confirmó una conexión SQL real. Están habilitados el buscador, los filtros, los aportes pendientes y el acceso privado al panel. La base comienza sin ofertas publicadas; ninguna tarea aprueba avisos.
 
-Para regenerar sus archivos desde las plantillas: `.venv/bin/python scripts/build_preview.py`. Revisar los cambios generados y subirlos a main para actualizar la página.
+El titular configuró sus claves directamente como Secret en Production. No se leyeron sus valores. Para ingresar se usa la contraseña elegida en el configurador privado. La prueba de ingreso con esa contraseña y la primera aprobación real quedan a cargo del titular: las verificaciones automáticas en producción no publican avisos ni acceden a su sesión.
 
-## Aplicación completa preparada para Vercel
+## Automatización y verificación
 
-El backend incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes de recopilación, vigencia y correo. Ninguna tarea aprueba ofertas. La revisión editorial permite comparar los campos de las versiones recibidas con los datos preparados.
+El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes manuales de recopilación, vigencia y correo. La revisión editorial compara versiones recibidas con los datos preparados. Las fuentes comienzan vacías y requieren revisión de condiciones y autorización explícita desde el panel. El adaptador Jobicy pasó una [comprobación real aislada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646224), sin habilitar producción.
 
-La suite ampliada pasó **265 pruebas con PostgreSQL 17 real en GitHub Actions**, sin omisiones ([ejecución verificada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646229)). El circuito editorial también [pasó en Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39096470700) para celular y escritorio; Jobicy [pasó su comprobación real aislada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646224). Ver [validación por fase](docs/VALIDACION.md) para distinguir los entornos. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y el correo real. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
+La configuración principal no instala cron. La propuesta programada permanece en `deploy/vercel-programado.json` hasta verificar plan, costos y funcionamiento. El correo está deshabilitado mientras no se configuren y prueben proveedor y remitente. WhatsApp y redes preparan textos y enlaces para compartir manualmente ofertas aprobadas; no hay publicación automática conectada.
 
-Antes de activar el backend, ejecutar `.venv/bin/python -m salta_emplea.cli check-production --with-crons`. El diagnóstico funciona con configuración incompleta y muestra nombres y estados, sin secretos. Agregar `--check-database` únicamente al comprobar explícitamente el acceso y esquema de la base: consulta en modo de solo lectura y no aplica migraciones ni envía correo.
+La suite pasó **265 pruebas con PostgreSQL 17 real**, sin omisiones ([ejecución](https://github.com/Matifernandezar/salta-emplea/actions/runs/39102858988)). El [workflow Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39102858915) verificó el circuito editorial completo con datos temporales y el backend público mediante consultas de solo lectura, en celular y escritorio. Ver [validación por fase](docs/VALIDACION.md), [QA de navegador](docs/QA-NAVEGADOR.md), [Vercel](docs/VERCEL.md) y [costos](docs/VERCEL-COSTOS.md).
 
-La conexión Neon ya figura en Production. El titular puede [preparar el acceso privado](https://salta-emplea.vercel.app/configurar-acceso) y guardar las tres variables generadas directamente en Vercel; la contraseña se elige y procesa en su propio navegador. Ver [instrucciones](docs/CONFIGURAR-ACCESO.md). La configuración principal no habilita cron automáticamente; la propuesta programada permanece en `deploy/vercel-programado.json` hasta validar plan, costos y funcionamiento.
+El diagnóstico `python -m salta_emplea.cli check-production --with-crons` muestra nombres y estados, sin valores secretos. `--check-database` agrega consultas de solo lectura de conexión y esquema; no migra ni envía correo. No usar SQLite en Vercel: el arranque lo rechaza.
+
+La carpeta `vista-previa/` conserva la publicación estática anterior, pero ya no se despliega. El [generador privado descargable](docs/CONFIGURAR-ACCESO.md) sigue disponible en el repositorio para cambios coordinados de acceso.
 
 ## Instalación local
 
@@ -47,7 +49,7 @@ El archivo [.env.example](.env.example) documenta solamente los nombres, sin sec
 
 ## Alternativa: producción en servidor propio
 
-Consultar [arquitectura](docs/ARQUITECTURA.md), [costos](docs/COSTOS.md), [fuentes](docs/FUENTES.md) y [operación](docs/OPERACION.md). Esta alternativa no está desplegada. La publicación pública actual sirve únicamente la vista preliminar estática en Vercel; no se contrataron servicios de pago.
+Consultar [arquitectura](docs/ARQUITECTURA.md), [costos](docs/COSTOS.md), [fuentes](docs/FUENTES.md) y [operación](docs/OPERACION.md). Esta alternativa no está desplegada. La publicación actual usa Flask y Neon en Vercel. No se contrató ni cambió ningún plan durante la activación.
 
 1. Elegir servidor Linux con disco persistente y copias de seguridad. Validar dominio y nombre antes de usarlos como marca disponible.
 2. Configurar el entorno de producción, hash y clave fuerte; base pública HTTPS. La aplicación falla al iniciar si faltan estos datos. El correo puede permanecer deshabilitado.

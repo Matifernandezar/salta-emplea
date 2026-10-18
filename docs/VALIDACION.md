@@ -1,5 +1,17 @@
 # Resultado por fase
 
+## Backend activo en Vercel con Neon — 18/10/2026
+
+El titular completó las tres claves privadas. Se confirmó su presencia como Secret en Production consultando únicamente nombres, tipos y alcance; no se leyeron valores. Se cambió la raíz del proyecto de `vista-previa` a la raíz Flask y se desplegó el backend. Vercel aplicó las migraciones PostgreSQL sin datos de prueba y terminó READY. `/salud` devolvió HTTP 200 con `{"status":"ok"}`, que ejecuta una consulta SQL real. El despliegue posterior del commit `406e50e` también terminó READY con la misma base persistente y migración idempotente.
+
+La [comprobación real en Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39102858915) pasó en 390 × 844 y 1440 × 1000. En producción verificó salud SQL, búsqueda y seis parámetros de filtro, páginas públicas, redirección de seis rutas privadas al ingreso y HTTP 401 en los tres cron sin credencial, con cabeceras de no almacenamiento. No detectó desborde horizontal en las pantallas comprobadas. La base comienza vacía: localidad, rubro y jornada se comprobaron con su opción vacía; los valores concretos y resultados se probaron en el circuito aislado. No se enviaron formularios de producción, no se aprobaron ofertas, no se usaron secretos ni se enviaron correos.
+
+La misma corrida completó el circuito editorial aislado en ambas pantallas y la prueba del generador privado como archivo local. La [suite PostgreSQL 17](https://github.com/Matifernandezar/salta-emplea/actions/runs/39102858988) pasó **265 pruebas sin omisiones, en 17,52 segundos**. La consulta de registros del despliegue inicial no devolvió grupos de errores/fatales durante la ventana comprobada; no sustituye monitoreo continuo. Sintaxis Python y revisión de diferencias correctas.
+
+Están habilitados el buscador, los filtros, aportes pendientes, acceso privado, administración y ejecución manual de lotes. La aprobación sigue siendo exclusiva del titular. Su ingreso con la contraseña elegida y la primera aprobación real no se probaron automáticamente: la contraseña no se conoce y no se publican ejemplos en producción. La revisión visual manual de capturas, restauración de backups y dispositivos físicos siguen pendientes.
+
+No hay fuentes autorizadas en producción, cron instalado, proveedor de correo ni publicación automática en redes. Las alertas informan que no registran direcciones hasta configurarse. Los textos y enlaces manuales de difusión requieren una oferta aprobada activa. Faltan completar responsable/contacto y verificar marca/dominio antes de anunciar el lanzamiento. No se contrató ni cambió ningún plan. La documentación de instalación y operación se actualizó al backend activo; el configurador privado se conserva como descarga, ya no como ruta pública de la aplicación.
+
 ## Vinculación de Neon y preparación del acceso — 18/10/2026
 
 El titular agregó Neon. La consulta de metadatos confirmó 18 variables de conexión, incluida `DATABASE_URL`, como Secret. Se restringieron de Preview+Production a Production y se verificó el cambio sin leer sus valores. Se configuraron también el origen público y el entorno de producción. Aún no se comprobó conexión SQL ni se aplicaron migraciones a la base del titular.

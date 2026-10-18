@@ -1,50 +1,45 @@
 # GitHub y Vercel
 
-Actualización: 18/10/2026. La [página preliminar](https://salta-emplea.vercel.app) está publicada en producción y accesible sin iniciar sesión. La aplicación Flask con PostgreSQL se conserva en el repositorio, pendiente de conectar y verificar en producción. SQLite se usa únicamente para trabajar localmente.
+Actualización: 18/10/2026. [Salta Emplea](https://salta-emplea.vercel.app) ejecuta Flask con PostgreSQL de Neon. La publicación estática anterior se conserva en Git, pero ya no es la raíz desplegada.
 
-## Publicación actual
+## Configuración activa
 
 - Proyecto Vercel: `salta-emplea`, equipo `matias-projects-2dbf9656`.
-- Repositorio conectado: `Matifernandezar/salta-emplea`, rama de producción `main`.
-- Root Directory: `vista-previa`. Framework: Other; sitio HTML y CSS estático.
-- URL pública: https://salta-emplea.vercel.app.
-- Verificación pública: inicio, alertas, publicar, administración, privacidad, condiciones y CSS devuelven HTTP 200 sin credenciales. La navegación y el contenido preliminar se comprobaron por HTTP; no se obtuvo una comprobación visual en navegador.
+- Repositorio público: `Matifernandezar/salta-emplea`, rama de producción `main`.
+- Root Directory: raíz del repositorio, sin subdirectorio. Framework: Flask.
+- Build Command: `python scripts/prepare_vercel.py`; sin directorio de salida personalizado.
+- `.python-version`: Python 3.12. `wsgi.py` exporta la aplicación.
+- URL pública: https://salta-emplea.vercel.app. Panel: `/admin/ingresar`.
+- `vercel.json` no programa tareas. `deploy/vercel-programado.json` es una propuesta pendiente de habilitación y validación de plan/costos.
 
-La vista preliminar no requiere base ni secretos. No incluye ofertas ficticias, formularios activos, suscripciones ni tareas. El panel publicado es una página informativa, no el administrador del backend. Los enlaces de funciones pendientes explican su estado. `scripts/build_preview.py` genera los archivos versionados desde las plantillas, usando una base temporal vacía y servicios deshabilitados. Para actualizar el sitio, regenerar, revisar y subir los archivos a main.
+El despliegue inicial del backend `dpl_BoajdyPMNqsY8WbxhcNuMypSrB3w`, commit `35ef8f2`, terminó READY. El registro de build confirmó migraciones PostgreSQL aplicadas sin datos de prueba. Una petición real a `/salud` devolvió HTTP 200 y `{"status":"ok"}`, que implica una consulta SQL correcta. Portada, aportes, alertas e ingreso respondieron HTTP 200; cron sin credencial respondió 401. Los resultados posteriores de navegador se registran en VALIDACION.md.
 
-La configuración de la raíz del repositorio corresponde al backend futuro; el despliegue estático utiliza `vista-previa/vercel.json`. No cambiar Root Directory hasta configurar y probar las dependencias siguientes.
+## Variables y acceso
 
-## Estado de acceso
+La conexión Neon y los nombres `SECRET_KEY`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`, `PUBLIC_BASE_URL` y `APP_ENV` figuran en Production. Las claves privadas y la conexión son Secret; se verificaron únicamente sus metadatos, sin leer valores. El titular eligió la contraseña y guardó el hash con el [generador privado](CONFIGURAR-ACCESO.md).
 
-El titular creó [Matifernandezar/salta-emplea](https://github.com/Matifernandezar/salta-emplea). El repositorio se creó público y se conservó esa visibilidad. El código y los commits en español se subieron a main, sin secretos, bases ni imágenes privadas. La vinculación con Vercel y la publicación estática están verificadas. No se modificó otro repositorio.
+Las variables de Neon se limitaron a Production. Los previews y PRs no reciben acceso a esa base. Para desplegar un preview funcional hay que configurar otra base y claves exclusivas de pruebas; no ampliar el alcance de las credenciales reales. El arranque en Vercel rechaza SQLite efímero y claves incompletas.
 
-El titular vinculó Neon el 18/10/2026. La consulta de metadatos confirma `DATABASE_URL` y otras variables de conexión como Secret. Se limitaron a Production para que los despliegues de prueba no reciban acceso a la base real. También están configurados `PUBLIC_BASE_URL` y `APP_ENV`. No se leyeron ni mostraron valores secretos. Esto confirma configuración presente, no una conexión SQL comprobada ni una migración ejecutada.
+La contraseña del titular no se conoce ni se recupera desde Vercel. El ingreso positivo con esa contraseña y la primera oferta real deben comprobarse por el titular. La CI usa credenciales ficticias y bases temporales para probar aprobación, permisos y cambios de versión.
 
-Faltan las claves de sesión, administrador y tareas. El [configurador local](CONFIGURAR-ACCESO.md) permite que el titular elija su contraseña y genere los valores dentro de su navegador, para guardarlos directamente como Secret en Vercel. El backend continúa sin activarse hasta completar la configuración y verificar el despliegue.
+## Qué está habilitado
 
-## Configuración preparada para el backend
+Buscador y filtros, aporte de enlace/texto/imagen pendiente, panel privado, revisión/aprobación/archivo/vencimiento, registro de fuentes, publicidad y botones de ejecución manual. Las imágenes privadas se guardan en PostgreSQL; no se depende del disco efímero de una función. El build copia el CSS a `public/static` y aplica migraciones idempotentes, sin sembrar ofertas, fuentes ni suscriptores.
 
-- `.python-version` fija Python 3.12; `wsgi.py` exporta la aplicación Flask.
-- `vercel.json` prepara la activación inicial del circuito editorial manual, sin programaciones. Los botones privados de Automatización siguen disponibles cuando se active el backend. `deploy/vercel-programado.json` conserva la propuesta de cron por hora, cada seis horas y cada quince minutos, pendiente de verificar plan y costos antes de habilitarla. No se contrató ni cambió ningún plan.
-- `scripts/prepare_vercel.py` copia el CSS a `public/static` y aplica migraciones PostgreSQL vacías e idempotentes. Requiere conexión configurada antes del build.
-- `DATABASE_URL` selecciona PostgreSQL y desactiva la creación de archivos locales. En Vercel es obligatoria. Nunca usar un archivo bajo `/tmp` como base permanente.
-- Las imágenes se redecodifican y guardan en PostgreSQL; la ruta de descarga sigue siendo privada. Las copias de PostgreSQL deben incluir esa tabla.
-- `CRON_SECRET` se compara con Authorization Bearer; no alcanza con conocer la URL de una tarea. Nunca contiene instrucciones para aprobar ofertas.
+La base inicial está vacía. No se aprobaron ofertas automáticamente ni se cargaron ejemplos en producción. La primera oferta se incorpora desde el panel o `/publicar`, se revisa contra el original y solo entonces el titular elige **Aprobar y publicar**.
 
-## Próxima etapa: activar la aplicación completa
+## Integraciones pendientes
 
-1. Conservar el repositorio y el proyecto ya vinculados. La configuración de CI ejecuta pruebas sin secretos de producción. Revisar que no se incluyan `.env`, bases, imágenes privadas ni credenciales.
-2. Mantener publicada la vista preliminar mientras se preparan las dependencias del backend. No indicar como activas las funciones pendientes.
-3. Preparar un despliegue de prueba de Flask con la raíz del repositorio y la configuración versionada, usando una base exclusiva de pruebas. Cambiar la raíz del proyecto público únicamente después de verificar el circuito completo y configurar producción.
-4. Conectar PostgreSQL, preferentemente mediante la integración Neon del proyecto. Usar una base exclusiva. No compartir producción con previews o pull requests. El plan gratuito tiene límites y no reemplaza una política de recuperación; ver costos antes de contratar.
-5. Configurar en Production los nombres de `.env.example` que correspondan: `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD_HASH`, `PUBLIC_BASE_URL`, `APP_ENV` y `CRON_SECRET`. Generar clave/hash con el CLI en un entorno privado; no pegarlos en el chat ni en Git. El origen público puede derivarse de `VERCEL_PROJECT_PRODUCTION_URL`, pero conviene fijarlo al dominio definitivo. El correo puede permanecer sin configurar.
-6. Ejecutar `python -m salta_emplea.cli check-production --with-crons` en el entorno configurado. No abre conexiones ni muestra valores. Después de aplicar la migración por separado, agregar `--check-database` para comprobar acceso y tablas en modo de solo lectura. Desplegar, revisar build y registros, y comprobar `/salud`, CSS, buscador, panel, permisos y persistencia entre peticiones. Hacer la primera prueba editorial con un aviso privado claramente identificado, sin publicarlo en producción hasta completar la revisión. Retirar los datos de prueba antes del lanzamiento.
-7. Probar cada cron con su autorización y comprobar las filas resultantes. El panel `/admin/automatizacion` permite iniciar lotes manuales y consultar corridas y evidencia de llamadas autenticadas. Esto no instala el programador ni certifica el proveedor de correo. Fuentes y correo siguen deshabilitados hasta verificar sus servicios reales; no enviar alertas de prueba a suscriptores públicos.
+- Fuentes: ninguna habilitada en producción. Revisar acceso y condiciones, registrar evidencia y autorizar antes de recopilar. La comprobación real aislada de Jobicy no concede esa autorización.
+- Correo: faltan proveedor y remitente. Sin ellos, `/alertas` informa que no registra direcciones. Probar consentimiento, recepción, resumen y baja con una dirección propia antes de abrir suscripciones.
+- Tareas programadas: no instaladas. Usar `/admin/automatizacion` para lotes manuales. Los endpoints cron exigen Authorization Bearer `CRON_SECRET`; la existencia de la clave no demuestra programación. Verificar plan y precios antes de habilitar el archivo opcional.
+- WhatsApp y redes: textos y enlaces manuales para ofertas aprobadas. No hay proveedores automáticos ni cuentas conectadas.
+- Operación: completar responsable/contacto en privacidad y condiciones, confirmar marca/dominio y comprobar restauración de backups en otra base. No se contrató ni cambió ningún plan.
 
-## Validación y recuperación
+## Actualizar y recuperar
 
-La suite local no necesita servicios externos. Las integraciones PostgreSQL se activan con `POSTGRES_TEST_URL` y crean un esquema aleatorio que eliminan al terminar; jamás usar una credencial de producción. La CI usa un PostgreSQL de pruebas separado. Los casos cubren transacciones, deduplicación concurrente, leases, persistencia privada y el circuito editorial.
+Los cambios a main despliegan la raíz Flask conectada. Revisar pruebas, build, estado READY y `/salud`. Una falla de build conserva la publicación anterior. No modificar secretos para resolver un error sin identificar su causa; nunca copiarlos a Git o al chat.
 
-Con PostgreSQL usar `pg_dump` o los respaldos del proveedor; el CLI no intenta respaldarlo con la API de SQLite. Probar recuperación en una base separada. Las migraciones futuras deben ser aditivas y versionadas; un rollback del código no revierte la base.
+Las migraciones de `scripts/prepare_vercel.py` se ejecutan explícitamente durante el build; las futuras deben ser aditivas y versionadas. Un rollback de código no revierte la base. Usar respaldos del proveedor o `pg_dump` y ensayar restauración en una base independiente. El comando de backup SQLite no corresponde a Neon.
 
-No se guardan valores de secretos en esta guía. Un bloqueo de permisos requiere intervención del titular; repetir una llamada rechazada no concede acceso.
+La suite con PostgreSQL usa `POSTGRES_TEST_URL` y esquemas aleatorios que elimina al finalizar; jamás darle una conexión de producción. El navegador público usa solo consultas sin credenciales y no escribe ofertas ni envía correos. Los resultados y límites de cada comprobación están en VALIDACION.md.
