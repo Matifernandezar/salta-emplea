@@ -104,6 +104,7 @@ FIELDS = (
 )
 MATERIAL_FIELDS = ("title", "company", "application_url", "location", "modality", "contract_type",
                    "schedule", "salary_amount", "salary_currency", "salary_period", "requirements", "description", "expires_at")
+TRUSTED_IMPORT_ACTORS = ("administrador", "recopilador_autorizado")
 
 
 def _list(value):
@@ -174,6 +175,27 @@ def _fingerprint(data):
     return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
+def _import_baseline(conn, job):
+    """Última versión recibida por un actor interno, sin confundirla con la edición.
+
+    La auditoría identifica su huella; la procedencia conserva los datos completos.
+    Un aporte público nunca puede sustituir esta referencia. Las bases anteriores
+    a este registro usan la versión preparada como comparación conservadora.
+    """
+    event = conn.execute("""SELECT detail FROM audit WHERE entity_id=?
+                         AND actor IN (?,?) AND action IN ('created','duplicate_received')
+                         ORDER BY id DESC LIMIT 1""", (job["id"], *TRUSTED_IMPORT_ACTORS)).fetchone()
+    if event:
+        detail = json.loads(event["detail"] or "{}")
+        fingerprint = detail.get("source_fingerprint")
+        if fingerprint:
+            source = conn.execute("SELECT payload FROM provenance WHERE job_id=? AND fingerprint=?",
+                                  (job["id"], fingerprint)).fetchone()
+            if source:
+                return json.loads(source["payload"])
+    return dict(job)
+
+
 def _duplicates(conn, data, exclude=None):
     result = []
     title = _fold(data["title"])
@@ -212,16 +234,23 @@ def create_job(conn, data, actor="comunidad"):
         if cleaned["source_canonical_url"]:
             existing = conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone()
             if existing:
+                baseline = _import_baseline(conn, existing)
                 _provenance(conn, existing["id"], cleaned)
-                changed = [field for field in MATERIAL_FIELDS if cleaned.get(field) is not None and cleaned.get(field) != existing[field]]
+                # Una retirada de datos también exige revisión. Comparar contra
+                # la fuente anterior evita retirar otra vez por una corrección
+                # editorial que ya fue aprobada explícitamente.
+                changed = [field for field in MATERIAL_FIELDS if cleaned.get(field) != baseline.get(field)]
                 # Las contribuciones públicas jamás pueden retirar una oferta:
                 # podrían contener cambios falsos o reproducir una URL ajena.
-                trusted_actor = actor in {"administrador", "recopilador_autorizado"}
+                trusted_actor = actor in TRUSTED_IMPORT_ACTORS
                 if changed and existing["status"] == "approved" and trusted_actor:
                     flags = list(dict.fromkeys(_list(existing["flags"]) + ["source_changed"]))
                     conn.execute("UPDATE jobs SET status='pending', review_needed=1, approved_at=NULL, approved_by=NULL, flags=?, updated_at=? WHERE id=?",
                                  (json.dumps(flags), stamp, existing["id"]))
-                _audit(conn, actor, "duplicate_received", existing["id"], {"material_changes": changed, "trusted_actor": trusted_actor})
+                _audit(conn, actor, "duplicate_received", existing["id"], {
+                    "material_changes": changed, "trusted_actor": trusted_actor,
+                    "source_fingerprint": _fingerprint(cleaned),
+                })
                 return existing["id"], [existing["id"]]
         else:
             repeated = conn.execute("SELECT p.job_id FROM provenance p JOIN jobs j ON j.id=p.job_id WHERE p.fingerprint=? AND j.source_canonical_url IS NULL LIMIT 1", (_fingerprint(cleaned),)).fetchone()
@@ -240,7 +269,9 @@ def create_job(conn, data, actor="comunidad"):
         cursor = conn.execute(f"INSERT INTO jobs ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", values)
         job_id = cursor.lastrowid
         _provenance(conn, job_id, cleaned)
-        _audit(conn, actor, "created", job_id, {"duplicate_ids": duplicate_ids})
+        _audit(conn, actor, "created", job_id, {
+            "duplicate_ids": duplicate_ids, "source_fingerprint": _fingerprint(cleaned),
+        })
     return job_id, duplicate_ids
 
 

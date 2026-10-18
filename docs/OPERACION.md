@@ -14,6 +14,8 @@ Para GitHub/Vercel, seguir primero VERCEL.md: la persistencia usa PostgreSQL y l
 
 **Cualquier edición vuelve a pendiente**, incluso cambios pequeños. Guardar y volver a aprobar para actualizar. Cambios sensibles detectados por el recopilador autorizado también retiran la publicación hasta revisión. Un aporte de la comunidad que repite una URL conserva su procedencia y no puede despublicar un aviso aprobado.
 
+En **Historial de procedencia y versiones recibidas → Comparar datos recibidos** podés consultar empresa, postulación, condiciones y datos ausentes de cada versión. Los aportes nunca reemplazan automáticamente los campos preparados. Si una fuente quita un contacto o condición, también vuelve a revisión. Repetir la misma versión respeta las correcciones editoriales ya aprobadas.
+
 ## Duplicados, vigencia y reportes
 
 Una URL canónica repetida conserva un solo aviso y su procedencia; se eliminan parámetros de seguimiento conocidos para compararla. Contenido idéntico sin URL también se reconoce. Empresa, puesto, localidad y similitud señalan candidatos a duplicado, sujetos a revisión. Esta comparación tiene un límite de 1.500 avisos recientes para mantener bajo el costo; ampliar el índice antes de crecer mucho.
@@ -49,7 +51,13 @@ Abrir Publicidad; cargar nombre, URL HTTPS de imagen, destino, ubicación y fech
 
 ## Tareas, errores y recuperación
 
-Ejecutar una corrida con `python -m salta_emplea.cli tasks`. `--only collect`, `--only expire` y `--only mail` permiten aislar etapas. Instalar cron en el servidor; el código no lo instala. Hay exclusión por archivo, transacciones, claves únicas, historial de corridas y reintentos de correo acotados. Revisar Fuentes, Tareas y Bandeja en el panel. Un reinicio marca corridas inconclusas como interrumpidas y recupera el procesamiento idempotente.
+Abrir **Automatización** en el panel privado. La pantalla muestra la base consultada, si hay configuración de correo, fuentes compatibles autorizadas, corridas recientes y la última llamada autenticada al cron. Tener claves presentes no demuestra que el proveedor funcione ni que el programador esté activo. Una llamada al cron tampoco demuestra que haya terminado: revisar el estado de la corrida.
+
+Los botones **Recopilar ofertas**, **Comprobar vigencia** y **Procesar correos** ejecutan un lote por acción. Requieren sesión y formulario vigente. Admiten seis intentos cada diez minutos, hasta una fuente por frecuencia y tres correos por lote manual, con presupuesto de un minuto. Si otra tarea ya está en curso, se omite la nueva. No habilitan fuentes ni aprueban ofertas. Sin configuración de correo los mensajes quedan pendientes, sin enviarse.
+
+Como alternativa, ejecutar una corrida con `python -m salta_emplea.cli tasks`. `--only collect`, `--only expire` y `--only mail` permiten aislar etapas. El código del backend prepara cron de Vercel; en un servidor propio hay que instalar el cron correspondiente. Hay exclusión compartida por archivo en SQLite o lease en PostgreSQL, transacciones, claves únicas, historial de corridas y reintentos de correo acotados. Un reinicio marca corridas inconclusas como interrumpidas y recupera el procesamiento idempotente. Estos mecanismos solo operan donde esté ejecutándose el backend, no en la publicación preliminar estática.
+
+Antes del despliegue, `python -m salta_emplea.cli check-production --with-crons` valida la configuración local sin mostrar valores ni abrir conexiones. `--check-database` agrega una comprobación explícita del acceso, las tablas y la versión usando solo lectura. Un diagnóstico correcto no verifica entregas de correo, programación de tareas ni tráfico real.
 
 Una entrega de correo incierta se detiene. Verificar el registro en Resend y conciliar sin reenviar con `python -m salta_emplea.cli reconcile-mail ID --result sent` o `--result cancelled`. No borrar reservas para forzar un reenvío. Los errores temporales confirmados admiten hasta tres intentos con espera y la misma clave dentro de 23 horas; después requieren revisión.
 

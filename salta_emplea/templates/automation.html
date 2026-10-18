@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import admin_nav, status_badge %}
+{% block title %}Automatización{% endblock %}
+{% block content %}
+<div class="container admin-container section-space">
+<p class="eyebrow">Administración privada</p>
+<h1>Automatización</h1>
+{{ admin_nav('automation') }}
+<div class="notice">Las tareas incorporan avisos pendientes, comprueban vigencia y procesan correos con consentimiento. Solo vos podés aprobar ofertas. Tener variables configuradas no demuestra que el programador o un proveedor estén funcionando.</div>
+<div class="admin-grid">
+<section class="paper admin-section">
+<h2>Configuración detectada</h2>
+<dl class="metadata-list">
+<div><dt>Base de datos conectada</dt><dd>{{ database_type }}. La lectura de esta página consultó la base real.</dd></div>
+<div><dt>Credencial de correo</dt><dd>{{ 'Presente' if mail_key_present else 'Pendiente' }}</dd></div>
+<div><dt>Remitente de correo</dt><dd>{{ 'Configurado' if mail_sender_present else 'Pendiente' }}</dd></div>
+<div><dt>Envío de correo</dt><dd>{% if mail_ready %}La configuración permite intentar envíos. No confirma la validez de la credencial, la autorización del remitente ni la entrega.{% else %}Deshabilitado por configuración incompleta o entorno de desarrollo. No se envían correos.{% endif %}</dd></div>
+<div><dt>Credencial del cron</dt><dd>{{ 'Presente' if cron_key_present else 'Pendiente' }}. No demuestra que haya una programación activa.</dd></div>
+<div><dt>Última llamada autenticada al cron</dt><dd>{{ cron_last|value }}{% if not cron_last %}. No hay evidencia de llamadas autenticadas al cron.{% else %}. Una llamada recibida no garantiza que la tarea haya terminado; contrastá el registro de corridas.{% endif %}</dd></div>
+<div><dt>Fuentes compatibles activas y autorizadas</dt><dd>{{ automatic_sources }}. El permiso de acceso lo registra el administrador en Fuentes.</dd></div>
+</dl>
+</section>
+<section class="paper admin-section">
+<h2>Ejecutar un lote manual</h2>
+<p>Cada acción dura hasta 60 segundos, respeta un único bloqueo compartido con CLI y cron, y admite hasta seis intentos cada diez minutos. Repetir una corrida conserva la detección de duplicados.</p>
+{% for task,label,description in [('collect','Recopilar ofertas','Consulta como máximo una fuente automática autorizada cuando corresponda por su frecuencia. Nunca habilita fuentes ni aprueba avisos.'),('expire','Comprobar vigencia','Vence los avisos con fecha de cierre y solicita revisión por antigüedad según la política configurada.'),('mail','Procesar correos','Prepara un lote de hasta tres suscripciones y procesa hasta tres correos. Solo envía en producción configurada, respetando confirmación, baja, vigencia y registros anteriores.')] %}
+<form action="{{ url_for('admin_run_task', task=task) }}" method="post" class="activity-item">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<p>{{ description }}</p><button class="button button-outline" type="submit">{{ label }}</button>
+</form>
+{% endfor %}
+</section>
+</div>
+<section class="admin-section">
+<h2>Fuentes y últimos resultados</h2>
+<p><a class="text-link" href="{{ url_for('admin_sources') }}">Revisar permisos y administrar fuentes →</a></p>
+<div class="table-wrap"><table>
+<thead><tr><th>Fuente</th><th>Método</th><th>Estado y autorización</th><th>Última consulta</th><th>Resultado</th></tr></thead>
+<tbody>{% for source in sources %}<tr>
+<td>{{ source.name }}</td><td>{{ source.method|value }}</td>
+<td>{{ status_badge(source.status) }}<span class="table-detail">{{ 'Acceso autorizado' if source.authorized else 'Autorización pendiente' }}. {{ 'Compatible para recopilar' if source.collectible else 'No se recopila automáticamente' }}.</span></td>
+<td>{{ source.last_run_at|value }}</td><td>{{ source.result_summary }}</td>
+</tr>{% else %}<tr><td colspan="5" class="table-empty">No hay fuentes registradas. No se consultará ningún sitio sin configurar su acceso.</td></tr>{% endfor %}</tbody>
+</table></div>
+</section>
+<section class="admin-section">
+<h2>Últimas corridas</h2>
+<p class="small">Registro compartido por ejecuciones manuales, CLI y cron. “Completado” indica que terminó el lote; un correo aceptado por el proveedor no garantiza llegada a la bandeja de entrada.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Tarea</th><th>Estado</th><th>Inicio</th><th>Fin</th><th>Resultado</th></tr></thead>
+<tbody>{% for run in task_runs %}<tr><td>{{ {'collect':'Recopilación','expire':'Vigencia','mail':'Correo','all':'Todas'}.get(run.task, 'Tarea registrada') }}</td><td>{{ status_badge(run.status) }}</td><td>{{ run.started_at|value }}</td><td>{{ run.finished_at|value }}</td><td>{% if run.status == 'failed' %}La corrida falló. Revisá la configuración y los registros del servidor.{% else %}{{ run.result_summary }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="table-empty">Todavía no hay corridas registradas.</td></tr>{% endfor %}</tbody>
+</table></div>
+</section>
+<section class="paper admin-section"><h2>Bandeja de correo</h2>
+<p>Los mensajes pendientes se conservan cuando falta configurar el proveedor. No se muestran direcciones, cuerpos ni tokens en esta pantalla.</p>
+{% for item in outbox_summary %}<p>{{ status_badge(item.status) }}: {{ item.total }}</p>{% else %}<p class="muted">No hay correos preparados.</p>{% endfor %}
+</section>
+</div>
+{% endblock %}

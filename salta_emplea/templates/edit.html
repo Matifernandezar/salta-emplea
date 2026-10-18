@@ -12,7 +12,7 @@
 <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
 </div>{% endif %}{% if job.flags %}<div class="notice notice-error">
 <strong>Señales que requieren atención</strong>
-<ul>{% for flag in job.flags %}<li>{{ {'payment_requested':'El aviso podría pedir un pago para postularse.','image_review':'El aviso contiene una imagen que requiere revisión humana.','possible_duplicate':'Posible duplicado: compará con los avisos existentes.'}.get(flag, flag) }}</li>{% endfor %}</ul>
+<ul>{% for flag in job.flags %}<li>{{ {'payment_requested':'El aviso podría pedir un pago para postularse.','image_review':'El aviso contiene una imagen que requiere revisión humana.','possible_duplicate':'Posible duplicado: compará con los avisos existentes.','source_changed':'La fuente cambió datos o retiró información. Compará las versiones recibidas antes de volver a aprobar.'}.get(flag, flag) }}</li>{% endfor %}</ul>
 <p>No apruebes sin contrastar estas señales con la fuente.</p>
 </div>{% endif %}{% if job.uncertain_fields %}<div class="notice">
 <strong>Información incierta:</strong> {% if job.uncertain_fields is string %}{{ job.uncertain_fields }}{% else %}{{ job.uncertain_fields|join(', ') }}{% endif %}. Revisala con el aviso original.</div>{% endif %}{% if duplicates %}<div class="notice">
@@ -41,10 +41,17 @@
 <img class="original-image" src="{{ url_for('admin_image', job_id=job.id) }}" alt="Imagen original aportada para esta oferta" loading="lazy">
 </a>
 <p class="small muted">La lectura de una imagen puede contener errores. Verificá cada dato.</p>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
-<summary>Historial de procedencia</summary>{% for item in provenance %}<article class="activity-item">
+<summary>Historial de procedencia y versiones recibidas</summary>
+<p class="small">Estos datos provienen de los aportes recibidos. No reemplazan la versión preparada ni su aprobación. Una fuente puede retirar información: revisá también los campos que ahora figuran como “No informado”.</p>{% for item in provenance %}<article class="activity-item">
 <strong>{{ item.source_name|default(item.name|default('Fuente aportada'), true) }}</strong>
 <p class="small">{{ item.collected_at|default(item.created_at)|date }}</p>{% if item.source_url %}<a class="small" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">Consultar publicación ↗</a>{% endif %}<p class="small preserve-lines">{{ item.original_text|default(item.note|default(''), true) }}</p>
-</article>{% endfor %}</details>{% endif %}</aside>
+{% if item.prepared_fields %}<details class="admin-details">
+<summary>Comparar datos recibidos</summary>
+<dl class="metadata-list">{% for field,label in [('title','Puesto'),('company','Empresa'),('application_url','Postulación'),('location','Localidad'),('modality','Modalidad'),('schedule','Jornada'),('contract_type','Contratación'),('requirements','Requisitos'),('description','Descripción'),('salary_amount','Sueldo informado'),('salary_currency','Moneda'),('salary_period','Período del sueldo'),('expires_at','Vencimiento')] %}<div>
+<dt>{{ label }}</dt>
+<dd class="preserve-lines">{{ item.prepared_fields.get(field)|value }}</dd>
+</div>{% endfor %}</dl>
+</details>{% endif %}</article>{% endfor %}</details>{% endif %}</aside>
 <section class="paper form-paper prepared-panel">
 <p class="eyebrow">Versión preparada</p>
 <h2>Datos para publicar</h2>

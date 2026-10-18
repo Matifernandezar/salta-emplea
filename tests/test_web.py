@@ -124,6 +124,30 @@ def test_empty_installation_has_public_pages_and_no_demonstration_jobs(client, c
     assert conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
 
 
+def test_review_compares_received_versions_without_overwriting_prepared_offer(admin, conn):
+    job_id = create_offer(conn, approved=True)
+    changed = offer(
+        company='<script>Empresa externa de prueba</script>',
+        application_url='https://example.org/nueva-postulacion',
+        requirements=None,
+        original_text='Cambio ficticio recibido de la fuente; requiere nueva revisión.',
+    )
+    domain.create_job(conn, changed, actor='recopilador_autorizado')
+    response = admin.get(f'/admin/ofertas/{job_id}')
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'La fuente cambió datos o retiró información.' in html
+    assert 'Historial de procedencia y versiones recibidas' in html
+    assert '&lt;script&gt;Empresa externa de prueba&lt;/script&gt;' in html
+    assert '<script>' not in html
+    assert 'https://example.org/nueva-postulacion' in html
+    assert 'No informado' in html
+    fields = {item.get('name'): item.get('value') for item in Elements(response).attrs('input')}
+    assert fields['application_url'] == offer()['application_url']
+    assert record(conn, job_id)['status'] == 'pending'
+    assert admin.get(f'/ofertas/{job_id}').status_code == 404
+
+
 def test_link_only_intake_requires_real_title_before_approval(client, conn):
     response = post(client, '/publicar', {'source_url': 'https://example.org/aviso-sin-extraer', 'consent': '1'})
     assert response.status_code == 200

@@ -18,6 +18,9 @@ def main():
     commands.add_parser('init', help='Crear o migrar base, sin datos de prueba')
     commands.add_parser('password-hash', help='Generar hash; contraseña por entrada oculta')
     commands.add_parser('secret-key', help='Generar clave de sesión; guardar solo en entorno privado')
+    production = commands.add_parser('check-production', help='Diagnóstico de Vercel sin mostrar secretos ni iniciar la app')
+    production.add_argument('--with-crons', action='store_true', help='Exigir CRON_SECRET antes de habilitar tareas')
+    production.add_argument('--check-database', action='store_true', help='Comprobar conexión y esquema PostgreSQL solo con SELECT')
     tasks = commands.add_parser('tasks', help='Ejecutar tareas una vez, con bloqueo exclusivo')
     tasks.add_argument('--only', choices=['collect', 'expire', 'mail'])
     backup = commands.add_parser('backup', help='Respaldo consistente de SQLite; PostgreSQL usa pg_dump')
@@ -38,6 +41,21 @@ def main():
         import secrets
         print(secrets.token_hex(32))
         return
+    if args.command == 'check-production':
+        from .config import load_env
+        from .deployment import check_production
+
+        try:
+            load_env()
+        except (OSError, ValueError):
+            print('ENV_FILE: ERROR — No se pudo leer la configuración local; revisar el archivo .env.')
+            return 1
+        checks = check_production(os.environ, with_crons=args.with_crons,
+                                  check_database=args.check_database)
+        print('Diagnóstico de configuración. No inicia la app ni envía correos.')
+        for check in checks:
+            print(f'{check.name}: {check.status} — {check.message}')
+        return int(any(check.failed for check in checks))
     app = create_app()
     database_target = app.config.get('DATABASE_TARGET') or app.config.get('DATABASE_URL') or app.config['DATABASE_PATH']
     if args.command == 'init':
@@ -86,4 +104,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

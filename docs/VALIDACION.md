@@ -1,5 +1,17 @@
 # Resultado por fase
 
+## Controles de automatización y versiones — 18/10/2026
+
+Se agregó el panel privado `/admin/automatizacion` con configuración detectada, corridas y ejecución manual de lotes. Reutiliza la exclusión compartida con CLI/cron, limita intentos, fuente, correos y tiempo, y nunca aprueba avisos. Se registra la recepción de llamadas autenticadas al cron sin afirmar que la programación esté activa.
+
+Las nuevas pruebas cubren permisos, CSRF, rutas de solo lectura, acciones inválidas, límites, exclusión, idempotencia y ausencia de envíos sin proveedor. Las importaciones comparan versiones recibidas sin sobrescribir datos preparados: detectar cambios o eliminación de contacto/condiciones revoca aprobación; repetir la versión respeta correcciones editoriales; aportes públicos no sustituyen la referencia confiable. Un correo pendiente se cancela antes de enviarse cuando pierde aprobación la oferta. La pantalla de revisión permite comparar los campos de cada versión, con escape del contenido externo.
+
+`check-production` valida configuración incompleta sin arrancar Flask y sin imprimir secretos. Su opción de base es explícita y de solo lectura: verifica conexión y esquema, sin migrar ni enviar mensajes. Se probaron errores del proveedor con información sensible para comprobar que no se revele.
+
+Resultado local de esta ampliación: **211 pruebas aprobadas y seis omitidas porque no hay PostgreSQL de pruebas configurado en esa ejecución**. Compilación y revisión de diferencias correctas. El intento adicional de PostgreSQL local encontró el servidor de pruebas anterior apagado; su recreación y ejecución posterior se interrumpieron. La CI del repositorio ejecuta los casos con PostgreSQL aislado; su resultado se debe comprobar para el commit de esta fase. Las pruebas de correo usan proveedores sustituidos y no acreditan recepción real.
+
+La consulta de metadatos de Vercel no encontró variables de entorno configuradas. Siguen pendientes PostgreSQL de producción, secretos del backend, cron y proveedor de correo. La web pública continúa siendo estática; estos cambios no habilitan funciones inexistentes allí. No se contrataron servicios ni se habilitaron fuentes en producción.
+
 ## Página pública preliminar — 18/10/2026
 
 Se publicó https://salta-emplea.vercel.app desde `vista-previa/` en el repositorio GitHub conectado. Vercel informa despliegue de producción READY. El inicio, `/alertas`, `/publicar`, `/admin`, `/privacidad`, `/condiciones` y `/static/style.css` responden HTTP 200 sin cookies ni credenciales, con contenido correcto y cabeceras de seguridad. La página está identificada como preliminar; comienza vacía, sin ofertas de prueba, y las funciones pendientes están deshabilitadas.

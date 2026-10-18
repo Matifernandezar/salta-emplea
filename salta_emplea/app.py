@@ -305,6 +305,89 @@ def create_app(config=None):
             channels=channels(), ads=[dict(r) for r in conn.execute('SELECT * FROM ads')],
             task_runs=[dict(r) for r in conn.execute('SELECT * FROM task_runs ORDER BY id DESC LIMIT 20')])
 
+    def automation_result(detail):
+        """Resume solo contadores conocidos, sin mostrar mensajes externos ni secretos."""
+        if not detail:
+            return 'Sin resultado registrado.'
+        try:
+            result = json.loads(detail)
+        except (ValueError, TypeError):
+            return 'Resultado registrado; requiere revisión.'
+        if not isinstance(result, dict):
+            return 'Resultado registrado; requiere revisión.'
+        labels = {
+            'received': 'recibidos', 'eligible': 'compatibles para revisión',
+            'created': 'incorporados', 'duplicates': 'duplicados', 'invalid': 'no válidos',
+            'expired': 'vencidos', 'review_requested': 'revisiones solicitadas',
+            'queued': 'preparados', 'sent': 'aceptados por el proveedor',
+            'skipped': 'omitidos', 'errors': 'errores', 'checked': 'comprobados',
+            'archived': 'archivados', 'unknown': 'sin estado confirmado',
+        }
+        parts = []
+        for section in (result, *(result.get(key) for key in ('expiration', 'queue', 'mail', 'status_check'))):
+            if isinstance(section, dict):
+                parts.extend(f'{label}: {section[key]}' for key, label in labels.items()
+                             if type(section.get(key)) is int and section[key] >= 0)
+        sources = result.get('sources')
+        if isinstance(sources, list):
+            parts.append(f'fuentes procesadas: {len(sources)}')
+        if result.get('budget_exhausted') is True:
+            parts.append('límite de tiempo alcanzado; pendientes conservados')
+        return '; '.join(parts) or 'Resultado registrado; consultá el estado de la corrida.'
+
+    @app.get('/admin/automatizacion')
+    @admin_required
+    def admin_automation():
+        from . import mailer
+        conn = connection()
+        sources = [dict(row) for row in conn.execute('SELECT * FROM sources ORDER BY name,id')]
+        for source in sources:
+            source['result_summary'] = automation_result(source['last_result'])
+            source['collectible'] = bool(source['status'] == 'active' and source['authorized']
+                                         and source['method'] == 'jobicy'
+                                         and source['url'] == 'https://jobicy.com/api/v2/remote-jobs')
+        runs = [dict(row) for row in conn.execute('SELECT * FROM task_runs ORDER BY id DESC LIMIT 20')]
+        for run in runs:
+            run['result_summary'] = automation_result(run['detail'])
+        cron_last = conn.execute("SELECT created_at FROM audit WHERE actor='programador' AND action='cron_recibido' ORDER BY id DESC LIMIT 1").fetchone()
+        return render_template('automation.html', sources=sources, task_runs=runs,
+            database_type='PostgreSQL' if db.is_postgres(app.config['DATABASE_TARGET']) else 'SQLite',
+            mail_key_present=bool(app.config['RESEND_API_KEY']),
+            mail_sender_present=bool(app.config['MAIL_FROM']),
+            mail_ready=mailer._valid_delivery_config(app.config),
+            cron_key_present=bool(app.config['CRON_SECRET']),
+            cron_last=cron_last['created_at'] if cron_last else None,
+            automatic_sources=sum(source['collectible'] for source in sources),
+            outbox_summary=[dict(row) for row in conn.execute('SELECT status,count(*) AS total FROM outbox GROUP BY status ORDER BY status')])
+
+    @app.post('/admin/automatizacion/<task>')
+    @admin_required
+    def admin_run_task(task):
+        if task not in ('collect', 'expire', 'mail'):
+            abort(404)
+        limited('admin_automation', 6, 600)
+        from . import mailer, tasks
+        # Un clic nunca ejecuta todas las tareas ni aumenta los lotes configurados.
+        config = dict(app.config)
+        try:
+            config['TASK_BUDGET_SECONDS'] = min(60, max(1, int(config.get('TASK_BUDGET_SECONDS', 180))))
+            config['TASK_SOURCE_BATCH'] = 1
+            config['TASK_MAIL_BATCH'] = min(3, max(1, int(config.get('TASK_MAIL_BATCH', 10))))
+            result = tasks.run_tasks(connection(), config, only=task)
+            audit('ejecutar_tarea_manual', detail=task)
+            if 'skipped' in result:
+                flash('Ya hay una tarea en ejecución. Esta corrida se omitió sin repetir el trabajo.', 'error')
+            elif task == 'mail' and not mailer._valid_delivery_config(config):
+                flash('Corrida registrada. No se enviaron correos: falta habilitar la configuración de envío de producción. Los pendientes se conservan.', 'success')
+            else:
+                flash('Corrida registrada. Revisá su estado y resultado antes de considerarla completada.', 'success')
+        except Exception as exc:
+            connection().rollback()
+            # No incluir str(exc) ni traceback: podrían contener URLs con credenciales.
+            app.logger.error('Falló la tarea manual %s (%s).', task, type(exc).__name__)
+            flash('No se pudo completar la corrida. Los registros conservan el estado; revisá la configuración antes de volver a intentar.', 'error')
+        return redirect(url_for('admin_automation'))
+
     @app.route('/admin/nueva', methods=['GET', 'POST'])
     @admin_required
     def admin_new():
@@ -328,6 +411,16 @@ def create_app(config=None):
             except ValueError as exc:
                 flash(str(exc), 'error')
         provenance = [dict(r) for r in connection().execute('SELECT * FROM provenance WHERE job_id=? ORDER BY id DESC', (job_id,))]
+        for version in provenance:
+            try:
+                payload = json.loads(version.get('payload') or '{}')
+            except (ValueError, TypeError):
+                payload = {}
+            version['prepared_fields'] = {
+                field: payload[field] for field in domain.MATERIAL_FIELDS
+                if isinstance(payload, dict) and field in payload
+                and (payload[field] is None or isinstance(payload[field], str))
+            }
         duplicates = [row_dict(r) for r in connection().execute('SELECT * FROM jobs WHERE id<>? AND lower(title)=lower(?) LIMIT 10', (job_id, job['title']))]
         return render_template('edit.html', job=job, duplicates=duplicates, provenance=provenance)
 
@@ -515,6 +608,9 @@ def create_app(config=None):
         supplied = request.headers.get('Authorization', '')
         if not secret or not hmac.compare_digest(supplied.encode(), ('Bearer ' + secret).encode()):
             abort(401)
+        with connection():
+            connection().execute('INSERT INTO audit(actor,action,detail,created_at) VALUES (?,?,?,?)',
+                                 ('programador', 'cron_recibido', task, domain.now()))
         from .tasks import run_tasks
         result = run_tasks(connection(), app.config, only=task)
         response = app.json.response(result)

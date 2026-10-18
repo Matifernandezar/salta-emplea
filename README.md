@@ -12,7 +12,11 @@ Para regenerar sus archivos desde las plantillas: `.venv/bin/python scripts/buil
 
 ## Aplicación completa preparada para Vercel
 
-El backend incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. Las 144 pruebas, incluidas las de PostgreSQL real, pasan localmente. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y los servicios externos. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
+El backend incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes de recopilación, vigencia y correo. Ninguna tarea aprueba ofertas. La revisión editorial permite comparar los campos de las versiones recibidas con los datos preparados.
+
+La suite ampliada pasa 211 pruebas locales; otras seis requieren PostgreSQL real. La versión anterior había pasado las 144 pruebas con PostgreSQL 17. Ver [validación por fase](docs/VALIDACION.md) para distinguir cada ejecución. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y los servicios externos. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
+
+Antes de activar el backend, ejecutar `.venv/bin/python -m salta_emplea.cli check-production --with-crons`. El diagnóstico funciona con configuración incompleta y muestra nombres y estados, sin secretos. Agregar `--check-database` únicamente al comprobar explícitamente el acceso y esquema de la base: consulta en modo de solo lectura y no aplica migraciones ni envía correo.
 
 ## Instalación local
 

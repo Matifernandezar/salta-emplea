@@ -41,6 +41,7 @@
   <nav class="admin-nav" aria-label="Administración">
 <a href="{{ url_for('admin') }}"{% if active == 'overview' %} aria-current="page"{% endif %}>Ofertas y actividad</a>
 <a href="{{ url_for('admin_sources') }}"{% if active == 'sources' %} aria-current="page"{% endif %}>Fuentes</a>
+<a href="{{ url_for('admin_automation') }}"{% if active == 'automation' %} aria-current="page"{% endif %}>Automatización</a>
 <a href="{{ url_for('admin_ads') }}"{% if active == 'ads' %} aria-current="page"{% endif %}>Publicidad</a>
 <a href="{{ url_for('admin_settings') }}"{% if active == 'settings' %} aria-current="page"{% endif %}>Configuración</a>
 <form action="{{ url_for('logout') }}" method="post">
