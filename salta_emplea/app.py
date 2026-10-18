@@ -14,11 +14,11 @@ from urllib.parse import quote, urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import db, domain
+from . import db, domain, extraction, image_pipeline, source_catalog
 from .config import load_env
 
 
@@ -37,6 +37,9 @@ def create_app(config=None):
         APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
+        GOOGLE_VISION_API_KEY=os.environ.get('GOOGLE_VISION_API_KEY', ''),
+        OCR_ENABLED=os.environ.get('OCR_ENABLED', '0'),
+        OCR_MONTHLY_LIMIT=os.environ.get('OCR_MONTHLY_LIMIT', '100'),
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
         PERMANENT_SESSION_LIFETIME=3600,
@@ -224,15 +227,19 @@ def create_app(config=None):
                 if img.format not in ('JPEG', 'PNG', 'WEBP') or img.width * img.height > 16_000_000:
                     raise ValueError('Usá una imagen JPG, PNG o WEBP de hasta 16 megapíxeles.')
                 img.load()
+                img = ImageOps.exif_transpose(img)
                 img.thumbnail((2400, 2400))
-                name = secrets.token_hex(24) + '.jpg'
+                image_buffer = BytesIO()
+                img.convert('RGB').save(image_buffer, 'JPEG', quality=85)
+                content = image_buffer.getvalue()
+                if len(content) > 4 * 1024 * 1024:
+                    raise ValueError('La copia de la imagen supera 4 MB; usá una versión más pequeña.')
+                name = hashlib.sha256(content).hexdigest() + '.jpg'
                 if db.is_postgres(app.config['DATABASE_TARGET']):
-                    image_bytes = BytesIO()
-                    img.convert('RGB').save(image_bytes, 'JPEG', quality=80)
                     with connection():
-                        connection().execute('INSERT INTO uploads(name,data,created_at) VALUES (?,?,?)', (name, image_bytes.getvalue(), domain.now()))
+                        connection().execute('INSERT INTO uploads(name,data,created_at) VALUES (?,?,?) ON CONFLICT(name) DO NOTHING', (name, content, domain.now()))
                 else:
-                    img.convert('RGB').save(Path(app.config['UPLOAD_DIR']) / name, 'JPEG', quality=85)
+                    (Path(app.config['UPLOAD_DIR']) / name).write_bytes(content)
                 return name
         except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
             raise ValueError('No se pudo leer la imagen. Usá JPG, PNG o WEBP.') from exc
@@ -242,7 +249,7 @@ def create_app(config=None):
         if 'uncertain_fields' in data:
             data['uncertain_fields'] = [x.strip() for x in data['uncertain_fields'].split(',') if x.strip()]
         # Estado, fechas de recopilación y aprobador nunca se toman del formulario.
-        for forbidden in ('status', 'approved_at', 'approved_by', 'collected_at', 'last_checked_at'):
+        for forbidden in ('status', 'approved_at', 'approved_by', 'collected_at', 'last_checked_at', 'image_path'):
             data.pop(forbidden, None)
         image = save_image(request.files.get('image'))
         if image:
@@ -250,10 +257,24 @@ def create_app(config=None):
             data['uncertain_fields'] = ['transcripción de imagen pendiente de revisión humana']
         elif existing:
             data['image_path'] = existing.get('image_path')
+        if not existing and str(data.get('original_text', '')).strip():
+            prepared = extraction.prepare_text(data['original_text'])
+            for field, value in prepared['fields'].items():
+                if not str(data.get(field) or '').strip():
+                    data[field] = value
+            data['uncertain_fields'] = domain._list(data.get('uncertain_fields')) + prepared['uncertain_fields']
         if not str(data.get('title', '')).strip() and any(data.get(key) for key in ('source_url', 'original_text', 'image_path')):
             data['title'] = 'Aviso pendiente de transcripción'
             data.setdefault('uncertain_fields', []).append('Puesto pendiente de transcripción humana; publicación bloqueada hasta completarlo')
         return data
+
+    def image_consent(job_id, actor, uploaded_name):
+        if request.form.get('allow_ocr') == '1' and image_pipeline.configured(app.config):
+            row = connection().execute('SELECT image_path,status FROM jobs WHERE id=?', (job_id,)).fetchone()
+            # Un duplicado público no autoriza el archivo privado que ya existía.
+            uploaded = request.files.get('image')
+            if row and row['status'] == 'pending' and row['image_path'] == uploaded_name and uploaded_name and uploaded and uploaded.filename:
+                image_pipeline.authorize(connection(), job_id, app.config, actor)
 
     @app.route('/publicar', methods=['GET', 'POST'])
     def submit_job():
@@ -264,11 +285,14 @@ def create_app(config=None):
                 errors.append('Confirmá que tenés permiso para compartir el contenido.')
             else:
                 try:
-                    job_id, duplicates = domain.create_job(connection(), job_form(), actor='comunidad')
+                    data = job_form()
+                    job_id, duplicates = domain.create_job(connection(), data, actor='comunidad')
+                    image_consent(job_id, 'comunidad', data.get('image_path'))
                     return render_template('message.html', title='Aviso recibido para revisión', message='El aviso quedó pendiente. Solo el administrador puede aprobar su publicación; si ya existía, conservamos su procedencia.')
                 except ValueError as exc:
                     errors.append(str(exc))
-        return render_template('submit.html', data=request.form, errors=errors)
+        return render_template('submit.html', data=request.form, errors=errors,
+                               image_status=image_pipeline.status(connection(), app.config))
 
     @app.route('/admin/ingresar', methods=['GET', 'POST'])
     def login():
@@ -322,9 +346,10 @@ def create_app(config=None):
             'queued': 'preparados', 'sent': 'aceptados por el proveedor',
             'skipped': 'omitidos', 'errors': 'errores', 'checked': 'comprobados',
             'archived': 'archivados', 'unknown': 'sin estado confirmado',
+            'processed': 'imágenes procesadas', 'prepared': 'avisos preparados',
         }
         parts = []
-        for section in (result, *(result.get(key) for key in ('expiration', 'queue', 'mail', 'status_check'))):
+        for section in (result, *(result.get(key) for key in ('expiration', 'queue', 'mail', 'status_check', 'images'))):
             if isinstance(section, dict):
                 parts.extend(f'{label}: {section[key]}' for key, label in labels.items()
                              if type(section.get(key)) is int and section[key] >= 0)
@@ -358,12 +383,13 @@ def create_app(config=None):
             cron_key_present=bool(app.config['CRON_SECRET']),
             cron_last=cron_last['created_at'] if cron_last else None,
             automatic_sources=sum(source['collectible'] for source in sources),
+            image_status=image_pipeline.status(conn, app.config),
             outbox_summary=[dict(row) for row in conn.execute('SELECT status,count(*) AS total FROM outbox GROUP BY status ORDER BY status')])
 
     @app.post('/admin/automatizacion/<task>')
     @admin_required
     def admin_run_task(task):
-        if task not in ('collect', 'expire', 'mail'):
+        if task not in ('collect', 'expire', 'mail', 'extract'):
             abort(404)
         limited('admin_automation', 6, 600)
         from . import mailer, tasks
@@ -379,6 +405,8 @@ def create_app(config=None):
                 flash('Ya hay una tarea en ejecución. Esta corrida se omitió sin repetir el trabajo.', 'error')
             elif task == 'mail' and not mailer._valid_delivery_config(config):
                 flash('Corrida registrada. No se enviaron correos: falta habilitar la configuración de envío de producción. Los pendientes se conservan.', 'success')
+            elif task == 'extract' and not image_pipeline.configured(config):
+                flash('La lectura de imágenes está pendiente de configuración. No se enviaron imágenes a ningún proveedor.', 'success')
             else:
                 flash('Corrida registrada. Revisá su estado y resultado antes de considerarla completada.', 'success')
         except Exception as exc:
@@ -393,11 +421,14 @@ def create_app(config=None):
     def admin_new():
         if request.method == 'POST':
             try:
-                job_id, _ = domain.create_job(connection(), job_form(), actor='administrador')
+                data = job_form()
+                job_id, _ = domain.create_job(connection(), data, actor='administrador')
+                image_consent(job_id, 'administrador', data.get('image_path'))
                 return redirect(url_for('admin_edit', job_id=job_id))
             except ValueError as exc:
                 flash(str(exc), 'error')
-        return render_template('edit.html', job=dict(request.form), duplicates=[], provenance=[])
+        return render_template('edit.html', job=dict(request.form), duplicates=[], provenance=[],
+                               image_status=image_pipeline.status(connection(), app.config), image_result=None)
 
     @app.route('/admin/ofertas/<int:job_id>', methods=['GET', 'POST'])
     @admin_required
@@ -422,7 +453,36 @@ def create_app(config=None):
                 and (payload[field] is None or isinstance(payload[field], str))
             }
         duplicates = [row_dict(r) for r in connection().execute('SELECT * FROM jobs WHERE id<>? AND lower(title)=lower(?) LIMIT 10', (job_id, job['title']))]
-        return render_template('edit.html', job=job, duplicates=duplicates, provenance=provenance)
+        return render_template('edit.html', job=job, duplicates=duplicates, provenance=provenance,
+                               image_status=image_pipeline.status(connection(), app.config),
+                               image_result=image_pipeline.result_for(connection(), job_id, job.get('image_path')))
+
+    @app.post('/admin/ofertas/<int:job_id>/leer-imagen')
+    @admin_required
+    def admin_extract_image(job_id):
+        limited('admin_automation', 6, 600)
+        if request.form.get('allow_ocr') != '1':
+            abort(400, 'Confirmá el permiso para analizar la imagen antes de continuar.')
+        if not image_pipeline.configured(app.config):
+            flash('La lectura está pendiente de configuración. No se envió ninguna imagen.', 'error')
+            return redirect(url_for('admin_edit', job_id=job_id))
+        from . import tasks
+        try:
+            image_pipeline.authorize(connection(), job_id, app.config, 'administrador')
+            config = dict(app.config, OCR_JOB_ID=job_id, TASK_BUDGET_SECONDS=60)
+            result = tasks.run_tasks(connection(), config, only='extract')
+            audit('solicitar_lectura_imagen', entity=job_id)
+            if result.get('images', {}).get('quota_reached'):
+                flash('Se alcanzó el límite mensual de lecturas. No se envió la imagen.', 'error')
+            else:
+                flash('Solicitud registrada. Revisá el resultado de lectura; esta acción nunca aprueba ni publica el aviso.', 'success')
+        except (ValueError, OSError):
+            flash('No se pudo leer esta imagen. Revisá que el aviso siga pendiente y que el archivo esté disponible.', 'error')
+        except Exception as exc:
+            connection().rollback()
+            app.logger.error('Falló la lectura de imagen (%s).', type(exc).__name__)
+            flash('La lectura no pudo completarse. Revisá el resultado antes de volver a intentar.', 'error')
+        return redirect(url_for('admin_edit', job_id=job_id))
 
     @app.post('/admin/ofertas/<int:job_id>/<action>')
     @admin_required
@@ -479,7 +539,25 @@ def create_app(config=None):
                 flash('Fuente guardada. La tarea CLI registra cada resultado.', 'success')
             except (ValueError, TypeError) as exc:
                 flash(str(exc), 'error')
-        return render_template('sources.html', sources=[dict(r) for r in connection().execute('SELECT * FROM sources')])
+        return render_template('sources.html', sources=[dict(r) for r in connection().execute('SELECT * FROM sources')],
+                               source_presets=source_catalog.source_presets())
+
+    @app.post('/admin/fuentes/preparadas/<key>')
+    @admin_required
+    def admin_source_preset(key):
+        try:
+            preset = source_catalog.select_preset(key)
+        except ValueError:
+            abort(404)
+        with connection():
+            db.editorial_lock(connection())
+            existing = connection().execute('SELECT id FROM sources WHERE url=?', (preset['url'],)).fetchone()
+            if not existing:
+                connection().execute("INSERT INTO sources(name,url,method,frequency_hours,status,terms_url,authorized) VALUES (?,?,'manual',24,'disabled',?,0)",
+                                     (preset['name'], preset['url'], preset['terms_url']))
+                audit('registrar_referencia_manual', detail=preset['name'])
+        flash('Referencia registrada. No habilita recopilación ni concede permiso para reutilizar contenido.', 'success')
+        return redirect(url_for('admin_sources'))
 
     @app.route('/admin/publicidad', methods=['GET', 'POST'])
     @admin_required
@@ -589,7 +667,7 @@ def create_app(config=None):
 
     @app.get('/privacidad')
     def privacy():
-        return render_template('message.html', title='Privacidad', message='No solicitamos cuentas ni almacenamos CV. Si activás alertas, guardamos tu correo, preferencias y consentimiento para enviarte ofertas hasta tu baja. Los reportes y aportes se usan para revisar contenido. Las imágenes aportadas son privadas para revisión. La publicidad externa puede cargar imágenes del anunciante. Podés solicitar corrección, retiro o eliminación desde el reporte de una oferta. Responsable y contacto institucional: pendientes de definir antes del lanzamiento público. No enviar datos sensibles. Retención y ejercicio de derechos: consultar la guía de operación antes de publicar.')
+        return render_template('message.html', title='Privacidad', message='No solicitamos cuentas ni almacenamos CV. Si activás alertas, guardamos tu correo, preferencias y consentimiento para enviarte ofertas hasta tu baja. Los reportes y aportes se usan para revisar contenido. Las imágenes aportadas son privadas para revisión. La lectura automática, si se habilita y se autoriza para esa imagen, envía una copia a Google Cloud Vision para extraer texto; no publica la imagen ni aprueba el aviso. No adjuntes CV, documentos personales ni datos sensibles. La publicidad externa puede cargar imágenes del anunciante. Podés solicitar corrección, retiro o eliminación desde el reporte de una oferta. Responsable y contacto institucional: pendientes de definir antes del lanzamiento público. Retención y ejercicio de derechos: consultar la guía de operación antes de publicar.')
 
     @app.get('/condiciones')
     def terms():
@@ -602,7 +680,7 @@ def create_app(config=None):
 
     @app.get('/api/cron/<task>')
     def cron(task):
-        if task not in ('collect', 'expire', 'mail'):
+        if task not in ('collect', 'expire', 'mail', 'extract'):
             abort(404)
         secret = app.config['CRON_SECRET']
         supplied = request.headers.get('Authorization', '')

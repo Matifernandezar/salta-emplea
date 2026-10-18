@@ -163,7 +163,7 @@ def run_tasks(conn, config, only=None):
     antes de recuperar task_runs para que una corrida concurrente jamás marque
     como interrumpida a otra todavía en curso.
     """
-    if only not in (None, 'collect', 'expire', 'mail'):
+    if only not in (None, 'collect', 'expire', 'mail', 'extract'):
         raise ValueError('Tarea desconocida.')
     budget = max(1, min(int(config.get('TASK_BUDGET_SECONDS', 180)), 240))
     deadline = time.monotonic() + budget
@@ -220,6 +220,14 @@ def _run_locked_tasks(conn, config, only, deadline):
             _check_budget(deadline)
             setting = conn.execute("SELECT value FROM settings WHERE key='review_days'").fetchone()
             result['expiration'] = domain.expire_jobs(conn, int(setting[0]) if setting else 30)
+        if only in (None, 'collect', 'extract'):
+            from . import image_pipeline
+            _check_budget(deadline)
+            result['images'] = image_pipeline.process(conn, config, deadline=deadline)
+            failed = failed or result['images'].get('errors', 0) > 0
+            if result['images'].get('budget_exhausted'):
+                result['budget_exhausted'] = True
+                failed = True
         if only in (None, 'mail'):
             _check_budget(deadline)
             batch = max(1, min(int(config.get('TASK_MAIL_BATCH', 10)), 100))

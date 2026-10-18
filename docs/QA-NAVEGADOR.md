@@ -73,3 +73,9 @@ cuando todavía se detecta la publicación preliminar.
 
 Las capturas necesitan inspección humana; no demuestran entrega de correo,
 autenticación con la contraseña del titular ni programación automática.
+
+## Circuito de imágenes preparado
+
+El navegador también ejecuta, en una base temporal por tamaño, la recepción de un PNG propio PRUEBA con permiso, su conversión a JPEG privado, un lote de lectura y la aprobación manual posterior. La respuesta de Google Cloud Vision está sustituida por texto ficticio: prueba la integración del sistema, no el reconocimiento real ni la facturación del proveedor. Repetir el lote no genera otro llamado ni reserva. La imagen requiere sesión y no se expone en la publicación pública. Comprueba también el diseño de Fuentes, edición y Automatización. No captura esas pantallas privadas ni envía archivos al proveedor.
+
+La comprobación pública agrega el rechazo sin credencial de `/api/cron/extract`; ninguna comprobación pública ejecuta OCR, crea avisos o aprueba publicaciones.

@@ -22,7 +22,7 @@ def main():
     production.add_argument('--with-crons', action='store_true', help='Exigir CRON_SECRET antes de habilitar tareas')
     production.add_argument('--check-database', action='store_true', help='Comprobar conexión y esquema PostgreSQL solo con SELECT')
     tasks = commands.add_parser('tasks', help='Ejecutar tareas una vez, con bloqueo exclusivo')
-    tasks.add_argument('--only', choices=['collect', 'expire', 'mail'])
+    tasks.add_argument('--only', choices=['collect', 'expire', 'mail', 'extract'])
     backup = commands.add_parser('backup', help='Respaldo consistente de SQLite; PostgreSQL usa pg_dump')
     backup.add_argument('destination')
     forget = commands.add_parser('forget-email', help='Eliminar correo y registros asociados a pedido del titular')

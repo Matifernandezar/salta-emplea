@@ -35,6 +35,10 @@ La salida contiene un único JSON con contadores, garantías comprobadas, catego
 | [Greenhouse](https://docs.greenhouse.io/job-board.html) / [Lever](https://github.com/lever/postings-api) | APIs oficiales documentadas para puestos publicados. No se verificaron endpoints de empleadores ni permiso general de redistribución: evaluar empresa por empresa. |
 | [LinkedIn](https://www.linkedin.com/help/linkedin/answer/a1341387/prohibition-of-scraping-software) / [Meta](https://www.facebook.com/legal/automated_data_collection_terms) | LinkedIn prohíbe scraping. Meta redirigió a acceso bloqueado; documentación de publicación respondió 429. Usar aportes manuales autorizados; automatización pendiente de permisos oficiales. |
 
+## Fuentes elegidas por el titular
+
+El 18/10/2026 se eligieron Instagram @empleosalta12, Computrabajo y LinkedIn. La cuenta de Instagram es de otra persona. Se preparó un catálogo de referencias manuales, sin autorización ni consultas activadas. La comprobación vigente y los límites concretos están en [FUENTES-ELEGIDAS.md](FUENTES-ELEGIDAS.md).
+
 ## Nombre
 
 **Salta Emplea sigue siendo provisional.** La búsqueda encontró una referencia DNS histórica secundaria a `saltaemplea.com.ar`; no acredita situación actual. No se verificó disponibilidad registral. Confirmar dominio en NIC Argentina y antecedentes en el [INPI](https://www.argentina.gob.ar/inpi/marcas/averigua-si-tu-marca-esta-registrada), incluyendo variantes, antes del lanzamiento. No se registró ni contrató nada.

@@ -252,7 +252,16 @@ def create_job(conn, data, actor="comunidad"):
                     "source_fingerprint": _fingerprint(cleaned),
                 })
                 return existing["id"], [existing["id"]]
-        else:
+        # Huella de la copia saneada: repetir una imagen conserva su procedencia
+        # aunque cambie el nombre del archivo subido o la URL del aporte.
+        if cleaned['image_path'] and re.fullmatch(r'[0-9a-f]{64}\.jpg', cleaned['image_path']):
+            repeated_image = conn.execute('SELECT id FROM jobs WHERE image_path=? ORDER BY id LIMIT 1',
+                                          (cleaned['image_path'],)).fetchone()
+            if repeated_image:
+                _provenance(conn, repeated_image['id'], cleaned)
+                _audit(conn, actor, 'duplicate_received', repeated_image['id'], {'exact_image': True})
+                return repeated_image['id'], [repeated_image['id']]
+        if not cleaned['source_canonical_url']:
             repeated = conn.execute("SELECT p.job_id FROM provenance p JOIN jobs j ON j.id=p.job_id WHERE p.fingerprint=? AND j.source_canonical_url IS NULL LIMIT 1", (_fingerprint(cleaned),)).fetchone()
             if repeated:
                 _audit(conn, actor, "duplicate_received", repeated["job_id"], {"exact_content": True})
@@ -277,6 +286,7 @@ def create_job(conn, data, actor="comunidad"):
 
 def edit_job(conn, job_id, data, actor):
     with conn:
+        db.editorial_lock(conn)
         existing = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         if existing is None:
             raise ValueError("La oferta no existe.")
@@ -306,6 +316,7 @@ def transition_job(conn, job_id, action, actor, acknowledge=False):
     if not _text(actor, 200):
         raise ValueError("Es necesario identificar al administrador.")
     with conn:
+        db.editorial_lock(conn)
         job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         if job is None:
             raise ValueError("La oferta no existe.")

@@ -34,6 +34,7 @@ La base inicial está vacía. No se aprobaron ofertas automáticamente ni se car
 - Correo: faltan proveedor y remitente. Sin ellos, `/alertas` informa que no registra direcciones. Probar consentimiento, recepción, resumen y baja con una dirección propia antes de abrir suscripciones.
 - Tareas programadas: no instaladas. Usar `/admin/automatizacion` para lotes manuales. Los endpoints cron exigen Authorization Bearer `CRON_SECRET`; la existencia de la clave no demuestra programación. Verificar plan y precios antes de habilitar el archivo opcional.
 - WhatsApp y redes: textos y enlaces manuales para ofertas aprobadas. No hay proveedores automáticos ni cuentas conectadas.
+- Lectura de imágenes: módulo preparado, inicialmente deshabilitado. Requiere credencial de Google Cloud Vision, habilitación y consentimiento por archivo; ver LECTURA-DE-IMAGENES.md. No se comprobó una llamada real ni se contrató el servicio.
 - Operación: completar responsable/contacto en privacidad y condiciones, confirmar marca/dominio y comprobar restauración de backups en otra base. No se contrató ni cambió ningún plan.
 
 ## Actualizar y recuperar

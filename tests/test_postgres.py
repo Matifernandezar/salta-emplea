@@ -264,3 +264,68 @@ def test_postgres_http_serverless_editorial_images_alerts_and_cron(postgres, tmp
     assert get(public, "/api/cron/expire", headers=cron_headers).status_code == 200
     assert get(public, f"/ofertas/{job_id}").status_code == 404
     assert conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0] == "expired"
+
+
+def test_postgres_image_reading_reserves_once_and_never_publishes(postgres, monkeypatch):
+    """Reserva → proveedor sustituido → PostgreSQL → otra conexión, sin red real."""
+    import hashlib
+    import io
+    from PIL import Image
+    from salta_emplea import extraction, image_pipeline, tasks
+
+    target, connect = postgres
+    conn = connect()
+    content = io.BytesIO()
+    Image.new('RGB', (80, 80), 'blue').save(content, 'JPEG', quality=85)
+    image = content.getvalue()
+    name = hashlib.sha256(image).hexdigest() + '.jpg'
+    with conn:
+        conn.execute('INSERT INTO uploads(name,data,created_at) VALUES (?,?,?)', (name, image, domain.now()))
+    job_id, _ = domain.create_job(conn, {'title': 'Aviso pendiente de transcripción', 'image_path': name})
+    config = {'DATABASE_TARGET': target, 'APP_ENV': 'production', 'OCR_ENABLED': '1',
+              'GOOGLE_VISION_API_KEY': 'clave-ficticia-no-productiva', 'OCR_MONTHLY_LIMIT': 1,
+              'SECRET_KEY': 'secreto-ficticio-de-pruebas'}
+    image_pipeline.authorize(conn, job_id, config, 'administrador-prueba')
+    calls = []
+    def extract(image_bytes, key):
+        calls.append(image_bytes)
+        return {'text': 'Puesto: PRUEBA — Atención\nCorreo: rrhh@example.test', 'warnings': []}
+    monkeypatch.setattr(extraction, 'extract_image', extract)
+    assert image_pipeline.status(conn, config)['pending'] == 1
+    assert tasks.run_tasks(conn, config, only='extract')['images']['prepared'] == 1
+    other = connect()
+    row = other.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
+    assert row['title'] == 'PRUEBA — Atención' and row['status'] == 'pending'
+    assert row['approved_at'] is None and domain.public_jobs(other) == []
+    assert image_pipeline.result_for(other, job_id, name)['status'] == 'completed'
+    assert image_pipeline.status(other, config)['pending'] == 0
+    assert tasks.run_tasks(other, config, only='extract')['images']['quota_reached'] is True
+    assert calls == [image]
+
+
+def test_postgres_edits_and_approvals_share_editorial_lock(postgres):
+    """Una lectura OCR no pierde el bloqueo entre contrastar y escribir datos."""
+    from threading import Event
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+
+    _, connect = postgres
+    owner = connect()
+    job_id, _ = domain.create_job(owner, _offer(), 'administrador')
+    started = Event()
+    def edit_or_approve(action):
+        concurrent = connect()
+        started.set()
+        if action == 'edit':
+            domain.edit_job(concurrent, job_id, {'title': 'PRUEBA — Edición concurrente'}, 'administrador')
+        else:
+            domain.transition_job(concurrent, job_id, 'approve', 'administrador', acknowledge=True)
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        for action in ('edit', 'approve'):
+            started.clear()
+            with owner:
+                db.editorial_lock(owner)
+                future = workers.submit(edit_or_approve, action)
+                assert started.wait(3)
+                with pytest.raises(FutureTimeout): future.result(timeout=0.15)
+            future.result(timeout=5)
+    assert owner.execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] == 'approved'

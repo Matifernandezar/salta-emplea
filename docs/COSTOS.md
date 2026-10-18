@@ -30,7 +30,7 @@ Ejemplo de volumen, no audiencia existente: 1.000 suscriptores semanales generan
 - Correo: cuenta Resend, dominio remitente validado por DNS, API y remitente autorizados; URL HTTPS estable y prueba real de confirmación, alerta y baja. Las variables se enumeran por nombre en `.env.example`. No se guardan secretos en Git. Revisar rebotes/supresiones en el proveedor; no se integró webhook de rebotes.
 - WhatsApp: compartir manualmente no requiere contratar la API. La automatización futura necesita activos propios de Meta, número, permisos, credenciales, consentimiento y posibles plantillas. Precio por país/categoría y proveedor: **pendiente**, consultar [tarifario oficial](https://business.whatsapp.com/products/platform-pricing). No se verificó publicación a canales o grupos mediante API compatible; no se promete.
 - Facebook/Instagram: identificar páginas/cuentas propias, tipo de cuenta, aplicación, permisos y revisión vigentes. Requisitos exactos, cuotas y costos de intermediario: **pendientes** en [Meta for Developers](https://developers.facebook.com/). Se entrega difusión manual; no adaptador automático simulado.
-- IA/OCR: no se contrata ni usa. Las imágenes se revisan y transcriben manualmente. Si se agrega extracción, presupuestar volumen y proveedor antes de habilitarlo.
+- IA/OCR: no se contrató ni habilitó un proveedor. El módulo opcional de Cloud Vision y sus costos verificados se documentan en [LECTURA-DE-IMAGENES.md](LECTURA-DE-IMAGENES.md); empieza deshabilitado y las pruebas usan respuestas sustituidas. El texto pegado se prepara con reglas locales, sin costo de proveedor.
 
 ## Dominio y nombre
 

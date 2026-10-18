@@ -1,6 +1,7 @@
 """QA Chromium aislado con datos PRUEBA; la comprobación pública es solo lectura."""
 import argparse
 from contextlib import contextmanager
+from io import BytesIO
 import logging
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from playwright.sync_api import expect, sync_playwright
+from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
@@ -193,6 +195,149 @@ def run_circuit(browser, viewport):
             context.close()
 
 
+def run_image_circuit(browser, viewport):
+    """Imagen propia de PRUEBA y proveedor sustituido; no envía nada a Google."""
+    title = 'PRUEBA — Operador de comercio desde imagen'
+    literal_text = (
+        f'Puesto: {title}\nEmpresa: PRUEBA Comercio ficticio\n'
+        'Localidad: Salta Capital\nModalidad: presencial\nRubro: Comercio\n'
+        'Jornada: Jornada completa\nContratación: PRUEBA temporal\n'
+        f'Postulación: {APPLICATION}\n'
+        'Requisitos: PRUEBA, requisito ficticio transcripto.\n'
+        'Descripción: PRUEBA, aviso ficticio exclusivo de QA. No postularse.'
+    )
+    image = Image.new('RGB', (700, 320), '#ffffff')
+    ImageDraw.Draw(image).text((20, 30), 'PRUEBA: AVISO FICTICIO PARA QA', fill='#123456')
+    image_buffer = BytesIO()
+    image.save(image_buffer, format='PNG')
+    image.close()
+    provider_calls = []
+
+    def substituted_ocr(content, api_key):
+        # save_image debe recibir el PNG y normalizarlo antes de la lectura.
+        assert content.startswith(b'\xff\xd8\xff')
+        assert api_key == 'PRUEBA-google-vision-ficticia'
+        with Image.open(BytesIO(content)) as received:
+            received.verify()
+        provider_calls.append(len(content))
+        return {'text': literal_text, 'provider': 'google_vision', 'warnings': []}
+
+    with isolated_server() as (app, origin), patch(
+            'salta_emplea.extraction.extract_image', side_effect=substituted_ocr):
+        # Sólo este servidor local usa la configuración productiva con credencial
+        # ficticia; el proveedor está sustituido y las cookies quedan en HTTP local.
+        app.config.update(APP_ENV='production', OCR_ENABLED='1', OCR_MONTHLY_LIMIT=2,
+                          GOOGLE_VISION_API_KEY='PRUEBA-google-vision-ficticia',
+                          SESSION_COOKIE_SECURE=False)
+        settings = {'viewport': viewport, 'is_mobile': viewport['width'] < 600,
+                    'has_touch': viewport['width'] < 600}
+        context = browser.new_context(**settings)
+        public_context = browser.new_context(**settings)
+        unexpected, applications = [], []
+
+        def route_request(route):
+            url = route.request.url
+            if url.startswith(origin + '/'):
+                route.continue_()
+            elif url == APPLICATION:
+                applications.append(url)
+                route.fulfill(status=200, content_type='text/html; charset=utf-8',
+                              body='<p>PRUEBA: canal original simulado, sin envío.</p>')
+            else:
+                unexpected.append(urlsplit(url).hostname)
+                route.abort()
+
+        context.route('**/*', route_request)
+        public_context.route('**/*', route_request)
+        try:
+            page = context.new_page()
+            page.goto(origin + '/admin/ingresar')
+            page.locator('[name="password"]').fill(PASSWORD)
+            page.get_by_role('button', name='Ingresar').click()
+            expect(page.get_by_role('heading', name='Ofertas y actividad')).to_be_visible()
+            page.goto(origin + '/admin/fuentes')
+            expect(page.get_by_role('heading', name='Fuentes que elegiste')).to_be_visible()
+            expect(page.get_by_role('button', name='Registrar referencia manual')).to_have_count(3)
+            no_horizontal_overflow(page)
+
+            page.goto(origin + '/admin/nueva')
+            page.locator('[name="title"]').fill('Aviso pendiente de transcripción')
+            page.locator('[name="source_name"]').fill('PRUEBA imagen propia de QA')
+            page.locator('[name="image"]').set_input_files({
+                'name': 'PRUEBA-aviso-ficticio.png', 'mimeType': 'image/png',
+                'buffer': image_buffer.getvalue(),
+            })
+            page.locator('[name="allow_ocr"]').check()
+            page.get_by_role('button', name='Guardar para revisión').click()
+            expect(page.get_by_role('heading', name='Revisar oferta')).to_be_visible()
+            no_horizontal_overflow(page)
+            jobs = rows(app, 'SELECT id,title,status,image_path,original_text FROM jobs')
+            assert len(jobs) == 1 and jobs[0]['status'] == 'pending'
+            assert jobs[0]['title'] == 'Aviso pendiente de transcripción'
+            assert jobs[0]['image_path'] and not jobs[0]['original_text']
+            job_id = jobs[0]['id']
+            assert not provider_calls
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_authorized'")) == 1
+            assert not rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")
+            public = public_context.new_page()
+            assert public.goto(f'{origin}/ofertas/{job_id}').status == 404
+            private_image = public_context.request.get(
+                f'{origin}/admin/imagenes/{job_id}', max_redirects=0)
+            assert private_image.status in (302, 303)
+            assert urljoin(origin, private_image.headers['location']) == origin + '/admin/ingresar'
+
+            page.goto(origin + '/admin/automatizacion')
+            no_horizontal_overflow(page)
+            page.get_by_role('button', name='Leer imágenes autorizadas').click()
+            expect(page.get_by_role('status')).to_contain_text('Corrida registrada')
+            assert len(provider_calls) == 1
+            page.goto(f'{origin}/admin/ofertas/{job_id}')
+            expect(page.locator('[name="title"]')).to_have_value(title)
+            expect(page.locator('[name="application_url"]')).to_have_value(APPLICATION)
+            expect(page.get_by_text('Pendiente de revisión', exact=True)).to_be_visible()
+            expect(page.get_by_text('Lectura recibida.', exact=False)).to_be_visible()
+            expect(page.get_by_role('button', name='Leer imagen y preparar datos')).to_have_count(0)
+            no_horizontal_overflow(page)
+            current = rows(app, 'SELECT title,application_url,status,original_text FROM jobs')[0]
+            assert current['title'] == title and current['application_url'] == APPLICATION
+            assert current['status'] == 'pending' and not current['original_text']
+            assert public.goto(f'{origin}/ofertas/{job_id}').status == 404
+
+            # Repetir mientras sigue pendiente no reenvía la imagen ni reserva cupo.
+            page.goto(origin + '/admin/automatizacion')
+            page.get_by_role('button', name='Leer imágenes autorizadas').click()
+            expect(page.get_by_role('status')).to_contain_text('Corrida registrada')
+            assert len(provider_calls) == 1
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 1
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_completed'")) == 1
+            assert rows(app, 'SELECT status FROM jobs')[0]['status'] == 'pending'
+
+            page.goto(f'{origin}/admin/ofertas/{job_id}')
+            page.locator('[name="acknowledge"]').check()
+            page.get_by_role('button', name='Aprobar y publicar').click()
+            expect(page.get_by_text('Aprobada', exact=True)).to_be_visible()
+            assert rows(app, 'SELECT status FROM jobs')[0]['status'] == 'approved'
+            assert public.goto(f'{origin}/ofertas/{job_id}').status == 200
+            expect(public.get_by_role('heading', level=1, name=title)).to_be_visible()
+            expect(public.locator('img[src*="/admin/imagenes/"]')).to_have_count(0)
+            no_horizontal_overflow(public)
+            apply = public.get_by_role('link', name='Postularme')
+            expect(apply).to_have_attribute('href', APPLICATION)
+            with public.expect_popup() as popup:
+                apply.click()
+            popup.value.wait_for_load_state('domcontentloaded')
+            expect(popup.value).to_have_url(APPLICATION)
+            assert applications == [APPLICATION]
+            popup.value.close()
+            assert not unexpected, f'La app intentó acceder a destinos externos: {unexpected}'
+            print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; imagen privada, '
+                  'preparación pendiente, aprobación e idempotencia. '
+                  'Proveedor OCR sustituido, no demuestra lectura real.')
+        finally:
+            public_context.close()
+            context.close()
+
+
 def check_access_helper(browser, target=None):
     """Archivo local, contraseña PRUEBA; nunca imprime ni captura los resultados."""
     import re
@@ -286,7 +431,7 @@ def check_public_backend(context, page, origin):
     expect(page.get_by_role('heading', name='Ingresá al panel')).to_be_visible()
     no_horizontal_overflow(page)
 
-    for task in ('collect', 'expire', 'mail'):
+    for task in ('collect', 'expire', 'mail', 'extract'):
         response = context.request.get(origin + '/api/cron/' + task, timeout=20000)
         assert response.status == 401, f'Cron {task}: no rechazó el acceso sin credencial.'
         assert 'no-store' in response.headers.get('cache-control', '')
@@ -346,6 +491,7 @@ def main():
         try:
             for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
                 run_circuit(browser, viewport)
+                run_image_circuit(browser, viewport)
             check_access_helper(browser)
             if args.check_public:
                 mode = check_public(browser)

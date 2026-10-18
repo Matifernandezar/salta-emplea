@@ -1,5 +1,15 @@
 # Resultado por fase
 
+## Fuentes elegidas y preparación de imágenes — 18/10/2026
+
+Se verificaron los límites de las fuentes elegidas: Instagram @empleosalta12 pertenece a un tercero; su tipo y el acceso a medios no quedaron comprobados. La documentación específica de Meta respondió 429; el aviso legal de Computrabajo quedó detrás de una comprobación de acceso; LinkedIn restringe scraping y su API de publicación no equivale a búsqueda de ofertas. Se prepararon tres referencias manuales sin autorización, habilitación ni consultas. No se contactó a sus titulares.
+
+Se agregó preparación determinista del texto pegado y un adaptador opcional a Google Cloud Vision. Las imágenes se normalizan, se reconocen por hash y permanecen privadas. Cada archivo requiere permiso antes de transferirse; el lector exige habilitación, credencial, entorno de producción y cupo mensual. Reserva antes de la consulta, procesa una imagen por lote y no repite fallos o resultados inciertos. El resultado conserva transcripción y evidencia, completa solo campos vacíos y nunca aprueba. Las ediciones y aprobaciones comparten el bloqueo editorial para conservar correcciones concurrentes. No se modifica el esquema ni se cargan ofertas o fuentes de prueba en producción.
+
+Las pruebas locales del adaptador y la preparación usan respuestas sustituidas, sin llamadas al proveedor. Se añadieron circuitos HTTP y PostgreSQL para cuota, consentimiento, idempotencia, protección de imágenes y concurrencia, y un circuito Chromium que adjunta una imagen propia PRUEBA, sustituye la respuesta OCR y exige aprobación. La verificación real de CI y del despliegue se registra al completarse; un proveedor sustituido no demuestra lectura de imágenes reales.
+
+El proveedor OCR y la programación permanecen deshabilitados, sin variables de OCR en Production al consultar sus nombres. Los precios oficiales y las dependencias se documentan en LECTURA-DE-IMAGENES.md. Hace falta una cuenta y credencial del titular, revisión de costos y una prueba real autorizada antes de habilitarlo. La publicación pública de flyers no está implementada: la imagen se conserva solo para revisión.
+
 ## Backend activo en Vercel con Neon — 18/10/2026
 
 El titular completó las tres claves privadas. Se confirmó su presencia como Secret en Production consultando únicamente nombres, tipos y alcance; no se leyeron valores. Se cambió la raíz del proyecto de `vista-previa` a la raíz Flask y se desplegó el backend. Vercel aplicó las migraciones PostgreSQL sin datos de prueba y terminó READY. `/salud` devolvió HTTP 200 con `{"status":"ok"}`, que ejecuta una consulta SQL real. El despliegue posterior del commit `406e50e` también terminó READY con la misma base persistente y migración idempotente.

@@ -6,8 +6,8 @@ El sitio activo es https://salta-emplea.vercel.app. Para GitHub/Vercel, seguir p
 
 1. En el sitio publicado, abrir https://salta-emplea.vercel.app/admin/ingresar y usar la contraseña elegida al preparar el acceso privado. No hay contraseña de fábrica. Para instalar otra copia local, seguir el README y configurar su propio `.env`.
 2. Abrir `/admin/ingresar`. Entrar y elegir **Incorporar oferta**. También podés recibir aportes desde `/publicar`, sin cuentas públicas.
-3. Copiar el enlace, el texto original o una imagen JPG/PNG/WEBP. Completar solo datos respaldados por la fuente. Un aporte solo con enlace o imagen queda con un título interno pendiente; ese título no se puede publicar.
-4. Comparar **Aviso original** y **Versión preparada**. Transcribir el puesto y revisar contacto, empresa, condiciones, residencia compatible con Salta y fechas. Las imágenes son privadas y requieren transcripción humana: no hay OCR conectado. Los datos inciertos se enumeran para revisión.
+3. Copiar el enlace, el texto original o una imagen JPG/PNG/WEBP. Un texto con etiquetas como “Puesto:” o “Correo:” permite preparar esos campos al incorporar el aviso, sin consultar a un proveedor externo. Completar solo datos respaldados por la fuente. Un aporte solo con enlace o imagen queda con un título interno pendiente; ese título no se puede publicar.
+4. Comparar **Aviso original** y **Versión preparada**. Transcribir el puesto y revisar contacto, empresa, condiciones, residencia compatible con Salta y fechas. Las imágenes son privadas. La lectura automática es opcional y empieza deshabilitada; si falta configuración, se transcriben manualmente. Ver LECTURA-DE-IMAGENES.md. Los datos inciertos se enumeran para revisión.
 5. Guardar. Revisar duplicados y señales de posibles pedidos de pago. El sueldo exige importe/rango, moneda, período y evidencia textual. Los campos ausentes aparecerán como **No informado**.
 6. Marcar el reconocimiento de alertas cuando corresponda y elegir **Aprobar y publicar**. Aprobar requiere un enlace HTTPS, WhatsApp con número internacional o `mailto:` válido. No es una verificación formal de la empresa.
 7. Abrir la publicación y comprobar el destino de **Postularme**. La postulación ocurre fuera del sitio; no se cargan CV. Una aprobación registrada prueba la decisión editorial; no garantiza contratación ni confirma automáticamente la legitimidad de la empresa.
@@ -26,7 +26,7 @@ En Configuración, elegir a cuántos días pedir revisión si no hay cierre: por
 
 ## Fuentes
 
-La base inicial no trae fuentes habilitadas. Ver `FUENTES.md` antes de dar de alta una.
+La base inicial no trae fuentes habilitadas. Ver `FUENTES.md` antes de dar de alta una. Las tarjetas de Instagram @empleosalta12, Computrabajo y LinkedIn permiten registrar referencias manuales sin activar consultas; ver `FUENTES-ELEGIDAS.md`.
 
 - Registrar nombre, URL, método, frecuencia y URL de condiciones. Marcar autorización únicamente después de revisarla. Se puede deshabilitar cada fuente desde su formulario.
 - El método **manual** es un registro de seguimiento: no simula una consulta automática. Usar Incorporar oferta.
@@ -53,7 +53,7 @@ Abrir Publicidad; cargar nombre, URL HTTPS de imagen, destino, ubicación y fech
 
 Abrir **Automatización** en el panel privado. La pantalla muestra la base consultada, si hay configuración de correo, fuentes compatibles autorizadas, corridas recientes y la última llamada autenticada al cron. Tener claves presentes no demuestra que el proveedor funcione ni que el programador esté activo. Una llamada al cron tampoco demuestra que haya terminado: revisar el estado de la corrida.
 
-Los botones **Recopilar ofertas**, **Comprobar vigencia** y **Procesar correos** ejecutan un lote por acción. Requieren sesión y formulario vigente. Admiten seis intentos cada diez minutos, hasta una fuente por frecuencia y tres correos por lote manual, con presupuesto de un minuto. Si otra tarea ya está en curso, se omite la nueva. No habilitan fuentes ni aprueban ofertas. Sin configuración de correo los mensajes quedan pendientes, sin enviarse.
+Los botones **Recopilar ofertas**, **Comprobar vigencia**, **Procesar correos** y **Leer imágenes autorizadas** ejecutan un lote por acción. Requieren sesión y formulario vigente. Admiten seis intentos cada diez minutos, hasta una fuente por frecuencia y tres correos por lote manual, con presupuesto de un minuto. Si otra tarea ya está en curso, se omite la nueva. No habilitan fuentes ni aprueban ofertas. Sin configuración de correo los mensajes quedan pendientes, sin enviarse. La lectura procesa hasta una imagen con permiso por lote, exige proveedor configurado y límite mensual disponible. Conserva la reserva antes de consultar; una lectura fallida o inconclusa no se reenvía automáticamente. Revisar o transcribir manualmente, sin borrar reservas para forzar cobros nuevos.
 
 Como alternativa, ejecutar una corrida con `python -m salta_emplea.cli tasks`. `--only collect`, `--only expire` y `--only mail` permiten aislar etapas. El código del backend prepara cron de Vercel; en un servidor propio hay que instalar el cron correspondiente. Hay exclusión compartida por archivo en SQLite o lease en PostgreSQL, transacciones, claves únicas, historial de corridas y reintentos de correo acotados. Un reinicio marca corridas inconclusas como interrumpidas y recupera el procesamiento idempotente. El backend activo incluye estos mecanismos; los lotes del panel requieren una acción explícita y no instalan un programador.
 

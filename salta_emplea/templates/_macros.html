@@ -108,7 +108,7 @@
 <label class="field">Enlace a la publicación original<input type="url" name="source_url" value="{{ data.source_url|default('', true) }}" maxlength="2000" placeholder="https://…">
 </label>
 <label class="field span-2">Texto original<textarea name="original_text" rows="7" maxlength="30000">{{ data.original_text|default('', true) }}</textarea>
-<span class="field-help">Se conserva para revisar la información y su procedencia.</span>
+<span class="field-help">Pegá el aviso que tengas permiso de compartir. Al incorporarlo, se preparan datos con etiquetas explícitas como “Puesto:” o “Correo:”; los datos dudosos quedan para revisión.</span>
 </label>{% if not admin %}<label class="field span-2">Imagen del aviso <span class="muted">(opcional)</span>
 <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
 <span class="field-help">PNG, JPEG o WebP. La imagen se revisa antes de publicar. No adjuntes CV ni documentos personales.</span>

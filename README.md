@@ -22,6 +22,14 @@ El diagnóstico `python -m salta_emplea.cli check-production --with-crons` muest
 
 La carpeta `vista-previa/` conserva la publicación estática anterior, pero ya no se despliega. El [generador privado descargable](docs/CONFIGURAR-ACCESO.md) sigue disponible en el repositorio para cambios coordinados de acceso.
 
+## Fuentes elegidas y lectura de imágenes
+
+Instagram **@empleosalta12**, Computrabajo y LinkedIn figuran como referencias preparadas en Fuentes, con acceso automático pendiente. Registrarlas no conecta sus publicaciones ni concede permiso de reutilización. Ver [estado y condiciones](docs/FUENTES-ELEGIDAS.md).
+
+Al incorporar texto pegado se preparan campos con etiquetas explícitas, sin proveedor externo ni publicación. Las imágenes iguales se reconocen por la huella de una copia saneada; quedan privadas para revisión. El módulo opcional de lectura usa Google Cloud Vision únicamente con configuración completa, consentimiento para esa imagen y cupo disponible. Conserva texto y evidencia, completa campos vacíos y nunca aprueba ni reemplaza correcciones concurrentes. Sueldos y fechas requieren revisión manual.
+
+La lectura externa empieza deshabilitada. Tener código y pruebas con respuestas sustituidas no demuestra una lectura real. Ver [configuración, costos y comprobación pendiente](docs/LECTURA-DE-IMAGENES.md). La tarea `extract` admite lotes manuales, CLI y endpoint de cron autenticado; no instala una programación ni conecta las tres fuentes.
+
 ## Instalación local
 
 Requiere Python 3.12 o posterior y Linux para el bloqueo del trabajador.

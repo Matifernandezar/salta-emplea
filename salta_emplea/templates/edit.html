@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% from '_macros.html' import admin_nav, offer_fields, status_badge %}
 {% block title %}{% if job.id %}Revisar oferta{% else %}Incorporar oferta{% endif %}{% endblock %}
-{% block content %}<div class="container admin-container section-space">
+{% block content %}{% set image_state = image_status|default({}) %}{% set image_reading = image_result|default(none) %}<div class="container admin-container section-space">
 <a class="back-link" href="{{ url_for('admin') }}">← Volver al panel</a>
 <div class="page-heading">
 <div>
@@ -40,7 +40,27 @@
 </dl>{% if job.source_url %}<a class="button button-outline button-full" href="{{ job.source_url }}" rel="noopener noreferrer" target="_blank">Abrir fuente original ↗</a>{% endif %}<pre class="original-text">{{ job.original_text|value }}</pre>{% if job.image_path and job.id %}<a href="{{ url_for('admin_image', job_id=job.id) }}" target="_blank" rel="noopener noreferrer">
 <img class="original-image" src="{{ url_for('admin_image', job_id=job.id) }}" alt="Imagen original aportada para esta oferta" loading="lazy">
 </a>
-<p class="small muted">La lectura de una imagen puede contener errores. Verificá cada dato.</p>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
+<p class="small muted">La imagen original se consulta en este panel privado. No se publica junto con la oferta.</p>
+<section class="admin-section">
+<h3>Lectura de la imagen</h3>
+{% if image_reading %}
+{% if image_reading.status == 'completed' %}<p>Lectura recibida. {% if image_reading.applied %}Los datos preparados se incorporaron para revisión.{% else %}Los datos actuales se conservaron para evitar reemplazar una edición.{% endif %} Contrastá cada dato con la imagen antes de aprobar.</p>
+<details class="admin-details"><summary>Texto y datos extraídos</summary>
+<pre class="original-text">{{ image_reading.text|value }}</pre>
+<dl class="metadata-list">{% for field, extracted_value in (image_reading.fields or {}).items() %}<div><dt>{{ {'title':'Puesto','company':'Empresa','location':'Localidad','modality':'Modalidad','sector':'Rubro','schedule':'Jornada','contract_type':'Contratación','requirements':'Requisitos','description':'Descripción','application_url':'Postulación','original_date':'Fecha original','expires_at':'Vencimiento','salary_amount':'Sueldo','salary_currency':'Moneda','salary_period':'Período','salary_source_evidence':'Respaldo del sueldo'}.get(field, field) }}</dt><dd class="preserve-lines">{{ extracted_value|value }}{% if image_reading.evidence and image_reading.evidence.get(field) %}<small>Respaldo: {{ image_reading.evidence.get(field) }}</small>{% endif %}</dd></div>{% endfor %}</dl>
+{% if image_reading.uncertain_fields %}<p><strong>Revisar:</strong> {% if image_reading.uncertain_fields is string %}{{ image_reading.uncertain_fields }}{% else %}{{ image_reading.uncertain_fields|join(', ') }}{% endif %}.</p>{% endif %}
+</details>
+{% elif image_reading.status == 'failed' %}<p class="notice notice-error">No se pudo completar la lectura. Revisá la imagen y la configuración; podés continuar la revisión manual. {% if image_reading.error_code %}Referencia: {{ image_reading.error_code }}.{% endif %}</p>
+{% elif image_reading.status == 'reserved' %}<p class="notice">Hay un intento de lectura registrado. Revisá el resultado antes de solicitar otra lectura.</p>{% endif %}
+{% endif %}
+{% if not image_state.ready %}<p class="small">La lectura automática no está habilitada o no tiene cupo. Podés transcribir los datos de la imagen.</p>{% endif %}
+{% if job.status == 'pending' and image_state.ready and not image_reading %}<form action="{{ url_for('admin_extract_image', job_id=job.id) }}" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para enviar esta imagen a Google Cloud Vision para extraer texto.</span></label>
+<p class="small">La lectura puede contener errores. Prepara datos para revisar y conserva el original; nunca publica.</p>
+<button class="button button-outline" type="submit">Leer imagen y preparar datos</button>
+</form>{% endif %}
+</section>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
 <summary>Historial de procedencia y versiones recibidas</summary>
 <p class="small">Estos datos provienen de los aportes recibidos. No reemplazan la versión preparada ni su aprobación. Una fuente puede retirar información: revisá también los campos que ahora figuran como “No informado”.</p>{% for item in provenance %}<article class="activity-item">
 <strong>{{ item.source_name|default(item.name|default('Fuente aportada'), true) }}</strong>
@@ -59,7 +79,7 @@
 <form method="post" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true) }}{% if not job.id %}<label class="field">Imagen original <span class="muted">(opcional)</span>
 <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
-</label>{% endif %}<button class="button" type="submit">Guardar para revisión</button>
+</label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if job.allow_ocr %} checked{% endif %}><span>Opcional: tengo permiso para enviar la imagen a Google Cloud Vision para extraer texto.<small>Se envía solo la imagen y el resultado queda para revisión.</small></span></label>{% else %}<p class="form-help">La imagen se revisará manualmente; la lectura automática no está habilitada.</p>{% endif %}{% endif %}<button class="button" type="submit">Guardar para revisión</button>
 </form>
 </section>
 </div>{% if job.id %}<section class="paper transition-panel">
