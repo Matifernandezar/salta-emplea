@@ -75,6 +75,8 @@ def run_circuit(browser, viewport):
     with isolated_server() as (app, origin):
         context = browser.new_context(viewport=viewport, is_mobile=viewport['width'] < 600,
                                       has_touch=viewport['width'] < 600)
+        public_context = browser.new_context(viewport=viewport, is_mobile=viewport['width'] < 600,
+                                             has_touch=viewport['width'] < 600)
         unexpected, applications = [], []
 
         def route_request(route):
@@ -83,13 +85,14 @@ def run_circuit(browser, viewport):
                 route.continue_()
             elif url == APPLICATION:
                 applications.append(url)
-                route.fulfill(status=200, content_type='text/html',
+                route.fulfill(status=200, content_type='text/html; charset=utf-8',
                               body='<p>PRUEBA: canal original simulado, sin envío.</p>')
             else:
                 unexpected.append(urlsplit(url).hostname)
                 route.abort()
 
         context.route('**/*', route_request)
+        public_context.route('**/*', route_request)
         try:
             page = context.new_page()
             assert page.goto(origin + '/').status == 200
@@ -119,7 +122,7 @@ def run_circuit(browser, viewport):
             jobs = rows(app, 'SELECT id,status FROM jobs')
             assert len(jobs) == 1 and jobs[0]['status'] == 'pending'
             job_id = jobs[0]['id']
-            public = context.new_page()
+            public = public_context.new_page()
             assert public.goto(f'{origin}/ofertas/{job_id}').status == 404
             public.goto(origin + '/')
             expect(public.get_by_role('link', name=TITLE, exact=True)).to_have_count(0)
@@ -160,8 +163,9 @@ def run_circuit(browser, viewport):
             with public.expect_popup() as popup:
                 apply.click()
             popup.value.wait_for_load_state('domcontentloaded')
-            expect(popup.value.get_by_text('PRUEBA: canal original simulado, sin envío.')).to_be_visible()
+            expect(popup.value).to_have_url(APPLICATION)
             assert applications == [APPLICATION]
+            expect(popup.value.get_by_text('PRUEBA: canal original simulado, sin envío.')).to_be_visible()
             popup.value.close()
 
             page.goto(origin + '/admin/automatizacion')
@@ -185,6 +189,7 @@ def run_circuit(browser, viewport):
             assert not unexpected, f'La app intentó acceder a destinos externos: {unexpected}'
             print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; circuito editorial y vigencia.')
         finally:
+            public_context.close()
             context.close()
 
 
