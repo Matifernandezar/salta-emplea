@@ -55,7 +55,7 @@ Cuando una fuente no ofrezca integración autorizada, incorporar manualmente un 
 
 ## Validación antes de darlo por operativo
 
-Falta probar una imagen autorizada contra el proveedor real, comprobar el texto recibido y su revisión en el panel, repetir la tarea para verificar que no duplique el procesamiento y revisar el consumo registrado por Google. Hasta completar ese circuito, presentar la conexión como **pendiente de configuración y verificación real**.
+La [suite PostgreSQL](https://github.com/Matifernandezar/salta-emplea/actions/runs/39106820564) y el [circuito Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39106820499) pasaron con respuestas OCR sustituidas y datos temporales. No hubo llamadas reales a Google. Falta probar una imagen autorizada contra el proveedor real, comprobar el texto recibido y su revisión en el panel, repetir la tarea para verificar que no duplique el procesamiento y revisar el consumo registrado por Google. Hasta completar ese circuito, presentar la conexión como **pendiente de configuración y verificación real**.
 
 Referencias oficiales adicionales:
 
