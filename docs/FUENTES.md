@@ -10,11 +10,11 @@ Contrato documentado: `GET /api/v2/remote-jobs`, filtros `geo`, `industry`, `tag
 
 La documentación limita cada sincronización automática a una por hora, ofrece una ventana de siete días con tres horas de demora y un endpoint `/status` con `active`, `closed`, `unknown`. Desaparecer del feed no significa cierre.
 
-**Comprobación pendiente:** no se obtuvo una respuesta HTTP real del endpoint en este entorno. El intento directo encontró una restricción de red y el intento con permisos adicionales fue interrumpido. El adaptador debe permanecer deshabilitado hasta verificar acceso, taxonomías, datos y circuito real. Las pruebas con fixtures no prueban integración real.
+**Comprobación técnica real: 18/10/2026.** La [corrida aislada de GitHub Actions](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646224) recibió 100 avisos mediante una única consulta al feed. Incorporó 16 con geografía compatible para revisión, sin errores de importación; cinco incluían sueldo respaldado. Reprocesar el mismo payload creó cero avisos y reconoció los 16 duplicados. Una consulta al endpoint de estado comprobó los 16, sin respuestas desconocidas. Las garantías de aprobación obligatoria y no invención de sueldos pasaron. La base temporal fue eliminada y no se habilitó ninguna fuente de producción. Es una muestra técnica, no una afirmación de vacantes publicadas, cobertura o elegibilidad definitiva.
 
-El código incluye comprobación del estado documentado, probada con fixtures: solo `closed` archiva; `unknown` y errores solicitan revisión. No se comprobó este endpoint con un servicio real. El adaptador procesa una página de hasta 100 avisos por corrida, sin paginación ni garantía de cobertura.
+El código incluye comprobación del estado documentado: solo `closed` archiva; `unknown` y errores solicitan revisión. La consulta real anterior verificó el contrato con estados activos; cierre explícito y fallos se probaron con fixtures. El adaptador procesa una página de hasta 100 avisos por corrida, sin paginación ni garantía de cobertura. Los originales extensos se guardan como fragmentos JSON válidos conservando el ID, con advertencia para revisar el original completo.
 
-### Nuevo método de comprobación aislada — pendiente de corrida real
+### Método de comprobación aislada
 
 El workflow separado [fuente-jobicy.yml](../.github/workflows/fuente-jobicy.yml) permite verificar acceso real desde GitHub Actions mediante ejecución manual o un cambio en ese workflow o en `scripts/verify_jobicy.py` sobre `main`. No tiene cron y su resultado no bloquea la suite de pruebas. Usa Python 3.12 y permisos de lectura de contenido e historial de Actions, sin credenciales de producción. El token efímero de GitHub se usa exclusivamente para comprobar la frecuencia y nunca se imprime.
 

@@ -6,9 +6,12 @@ preinstalado del runner e informa su versión en el registro. Los cambios releva
 de la aplicación lo activan en `push` y `pull_request`; también admite ejecución
 manual desde GitHub Actions.
 
-**Estado inicial:** preparado para ejecutar en CI. La existencia del script y del
-workflow no confirma una corrida exitosa. Consultá el resultado real del workflow
-antes de considerar aprobada esta verificación.
+**Ejecución verificada: 18/10/2026.** El [workflow real](https://github.com/Matifernandezar/salta-emplea/actions/runs/39096470700)
+terminó correctamente con el commit `32fee51`. Completó el circuito local en
+390 × 844 y 1440 × 1000; las dos visitas a Vercel también respondieron HTTP 200,
+con el contenido preliminar esperado y sin desborde horizontal. Las capturas
+públicas están en el artefacto de esa corrida. Su inspección visual manual y las
+pruebas en dispositivos físicos siguen pendientes.
 
 ## Circuito cubierto
 
@@ -17,7 +20,7 @@ propia aplicación Flask, SQLite e imágenes en una carpeta temporal. El navegad
 
 1. Abre la página pública y comprueba que el panel exige ingresar.
 2. Envía un aviso identificado como **PRUEBA** mediante el formulario real.
-3. Comprueba que continúa pendiente, oculto en el buscador y con detalle HTTP 404.
+3. Comprueba en una sesión anónima separada que continúa pendiente, oculto en el buscador y con detalle HTTP 404.
 4. Ingresa al panel con una contraseña ficticia de QA y aprueba el aviso.
 5. Busca y combina localidad, rubro, modalidad, jornada y fecha; comprueba también
    una modalidad sin coincidencias.

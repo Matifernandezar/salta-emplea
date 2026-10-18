@@ -14,7 +14,7 @@ Para regenerar sus archivos desde las plantillas: `.venv/bin/python scripts/buil
 
 El backend incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes de recopilación, vigencia y correo. Ninguna tarea aprueba ofertas. La revisión editorial permite comparar los campos de las versiones recibidas con los datos preparados.
 
-La suite ampliada pasó **217 pruebas con PostgreSQL 17 real en GitHub Actions**, sin omisiones ([ejecución verificada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094104057)). Ver [validación por fase](docs/VALIDACION.md) para distinguir los entornos. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y los servicios externos. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
+La suite ampliada pasó **265 pruebas con PostgreSQL 17 real en GitHub Actions**, sin omisiones ([ejecución verificada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646229)). El circuito editorial también [pasó en Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39096470700) para celular y escritorio; Jobicy [pasó su comprobación real aislada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646224). Ver [validación por fase](docs/VALIDACION.md) para distinguir los entornos. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y el correo real. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
 
 Antes de activar el backend, ejecutar `.venv/bin/python -m salta_emplea.cli check-production --with-crons`. El diagnóstico funciona con configuración incompleta y muestra nombres y estados, sin secretos. Agregar `--check-database` únicamente al comprobar explícitamente el acceso y esquema de la base: consulta en modo de solo lectura y no aplica migraciones ni envía correo.
 
@@ -64,7 +64,7 @@ El Dockerfile y Compose están preparados pero su ejecución en un servidor de p
 
 Las pruebas incluyen edición/reaprobación, duplicados, vencimientos, enlaces, permisos, filtros, doble consentimiento y baja, colas y reejecuciones. Los adaptadores de correo se prueban con respuestas simuladas explícitas; esto no demuestra entrega real. Ver [validación por fase](docs/VALIDACION.md).
 
-GitHub Actions también prepara un [circuito real en Chromium](docs/QA-NAVEGADOR.md) para celular y escritorio, y una [comprobación aislada de Jobicy](docs/FUENTES.md). Son verificaciones separadas: consultar el resultado de cada corrida antes de afirmar que pasaron. La comprobación de fuente limita la frecuencia, no publica avisos y no habilita producción. El navegador conserva solo capturas públicas, sin sesiones ni datos del panel.
+GitHub Actions ejecuta un [circuito real en Chromium](docs/QA-NAVEGADOR.md) para celular y escritorio, y una [comprobación aislada de Jobicy](docs/FUENTES.md). Son verificaciones separadas: consultar el resultado de cada corrida antes de afirmar que pasaron. La comprobación de fuente limita la frecuencia, no publica avisos y no habilita producción. El navegador conserva solo capturas públicas, sin sesiones ni datos del panel.
 
 ## Operación y recuperación
 
