@@ -1,6 +1,6 @@
 # Lectura de imágenes y preparación de avisos
 
-La lectura de imágenes está preparada como función opcional. **Google Cloud Vision no está configurado en producción y todavía no se verificó una extracción real con ese proveedor.** No se contrató una cuenta ni se enviaron imágenes reales durante estas pruebas.
+La lectura de imágenes es opcional. **El titular configuró la clave y habilitó producción con un cupo de 999 intentos mensuales. Todavía no se verificó una lectura real exitosa con Google.** La primera prueba comunicada por el titular devolvió `credentials_rejected`: Google rechazó el acceso, sin precisar en ese registro antiguo si faltaba habilitar la API, la facturación o ajustar la clave. No se leyeron valores de secretos ni se contrataron servicios desde el asistente.
 
 La preparación de texto pegado funciona localmente con etiquetas explícitas. No usa IA generativa ni tiene costo por consulta externa. Los datos ausentes siguen como «No informado» y ninguna preparación aprueba o publica el aviso.
 
@@ -14,9 +14,9 @@ La preparación de texto pegado funciona localmente con etiquetas explícitas. N
 
 El OCR reconoce texto: no garantiza que una imagen sea auténtica ni que los contactos, importes o fechas estén bien leídos. No completa información inventada. La detección de duplicados y la aprobación obligatoria siguen aplicándose.
 
-La autorización y los resultados se registran asociados a la huella del archivo. Los fallos y resultados inciertos requieren revisión; no se reintentan automáticamente. Esto evita repetir solicitudes ante una respuesta cuyo resultado de facturación sea desconocido.
+La autorización y los resultados se registran asociados a la huella del archivo. Los fallos y resultados inciertos requieren revisión; no se reintentan automáticamente. Un rechazo inequívoco de acceso permite un reintento manual acotado, como se explica abajo. Esto evita repetir solicitudes ante una respuesta cuyo resultado de facturación sea desconocido.
 
-## Cuenta y configuración pendientes
+## Cuenta y configuración
 
 Antes de activar el servicio, el titular debe crear o elegir un proyecto de Google Cloud, vincular una cuenta de facturación, habilitar Cloud Vision API y generar una clave con restricción de API para Cloud Vision. Los presupuestos de Google Cloud sirven como aviso; no constituyen un corte garantizado del gasto.
 
@@ -30,7 +30,7 @@ Variables por nombre, sin valores secretos de ejemplo:
 | `OCR_ENABLED` | Activación explícita. La función permanece apagada de forma predeterminada; activar después de configurar y revisar el costo. |
 | `OCR_MONTHLY_LIMIT` | Cupo local de intentos por mes UTC: 100 inicialmente y máximo admitido de 1000. |
 
-Solo después de configurar y habilitar el servicio, y con autorización para esa imagen, el archivo se transfiere a Google para su lectura. Antes de habilitarlo corresponde revisar las condiciones del proveedor y comunicar esta transferencia en la información de privacidad. Se pueden seguir incorporando texto y avisos manuales mientras esté deshabilitado.
+La configuración inicial mantiene el lector apagado. En este proyecto el titular ya lo habilitó; el despliegue recibió la clave sin que el asistente leyera su valor. Solo con autorización para esa imagen, el archivo se transfiere a Google para su lectura. Antes de habilitarlo corresponde revisar las condiciones del proveedor y comunicar esta transferencia en la información de privacidad. Se pueden seguir incorporando texto y avisos manuales mientras esté deshabilitado.
 
 ## Precios oficiales consultados
 
@@ -46,6 +46,16 @@ Consulta: **18 de octubre de 2026**. Valores de lista en USD para `DOCUMENT_TEXT
 Google prorratea el último bloque. Por ejemplo, 1500 unidades de esta función costarían USD 0,75 si las primeras 1000 gratuitas están disponibles y no hay otros cargos. El cupo gratuito **no es una reserva exclusiva para Salta Emplea**: otras aplicaciones y usos dentro del ámbito de facturación del proveedor pueden consumirlo. Impuestos, conversión de moneda y otros servicios de Google Cloud pueden sumar cargos.
 
 El límite local de 100 intentos mensuales reduce el uso de esta aplicación, pero no garantiza una factura de USD 0 ni controla otras claves o aplicaciones. Los intentos reservados y los posibles cargos reales del proveedor son conceptos diferentes. Conviene revisar también cuotas, consumo y alertas desde Google Cloud.
+
+## Resolver un rechazo de Google
+
+En el proyecto donde se creó la clave, comprobar [Cloud Vision API habilitada](https://console.cloud.google.com/apis/library/vision.googleapis.com), [facturación vinculada](https://console.cloud.google.com/billing) y [restricciones de la clave](https://console.cloud.google.com/apis/credentials). La clave debe permitir Cloud Vision API. Esta aplicación consulta desde el servidor de Vercel; las restricciones por sitios web/HTTP referrer no corresponden. No inventar una dirección IP fija del servidor.
+
+Las respuestas nuevas distinguen `service_disabled`, `billing_disabled`, `api_key_invalid`, `api_key_expired` y `api_key_restricted` cuando Google aporta una razón oficial reconocida. Si no hay evidencia precisa, se conserva un mensaje general; no se adivina la causa. Se descartan el texto libre, metadatos, proyectos y URLs que puedan aparecer en errores del proveedor.
+
+Después de corregir Google, recargar el aviso pendiente y usar **Reintentar lectura tras corregir Google**. Confirmar el permiso y la revisión de configuración. Esta acción está disponible solo para rechazos de acceso definidos, con un máximo de tres intentos totales por imagen. Conserva el primer fallo y todas las reservas; cada nuevo intento cuenta en el cupo mensual. Un doble envío del mismo formulario no autoriza otra lectura y un formulario antiguo no permite reintentar un fallo nuevo.
+
+Reservas inconclusas, timeouts, errores de red, respuestas ambiguas y lecturas completadas no permiten este reintento. No borrar auditoría, restablecer contadores ni volver a subir la imagen repetidamente para eludir estos controles. Una imagen rechazada sigue privada y la oferta requiere aprobación manual.
 
 ## Fuentes y permisos
 

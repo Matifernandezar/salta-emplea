@@ -17,9 +17,14 @@ ACTIONS = ('ocr_reserved', 'ocr_completed', 'ocr_failed')
 _PENDING_SQL = """FROM jobs j WHERE j.status='pending' AND j.image_path IS NOT NULL
     AND EXISTS (SELECT 1 FROM audit a WHERE a.entity_id=j.id AND a.action='ocr_authorized'
         AND a.detail LIKE '%"image_path": "' || j.image_path || '"%')
-    AND NOT EXISTS (SELECT 1 FROM audit a WHERE a.entity_id=j.id
+    AND (NOT EXISTS (SELECT 1 FROM audit a WHERE a.entity_id=j.id
         AND a.action IN ('ocr_reserved','ocr_completed','ocr_failed')
-        AND a.detail LIKE '%"image_path": "' || j.image_path || '"%')"""
+        AND a.detail LIKE '%"image_path": "' || j.image_path || '"%') OR EXISTS (
+        SELECT 1 FROM audit r WHERE r.entity_id=j.id AND r.action='ocr_retry_authorized'
+        AND r.detail LIKE '%"image_path": "' || j.image_path || '"%'
+        AND r.id > COALESCE((SELECT MAX(a.id) FROM audit a WHERE a.entity_id=j.id
+            AND a.action IN ('ocr_reserved','ocr_completed','ocr_failed')
+            AND a.detail LIKE '%"image_path": "' || j.image_path || '"%'),0)))"""
 
 
 def monthly_limit(config):
@@ -56,14 +61,15 @@ def image_bytes(conn, config, image_path):
     return content
 
 
-def _details(conn, job_id, actions):
+def _details(conn, job_id, actions, image_path=None):
     placeholders = ','.join('?' for _ in actions)
-    for row in conn.execute(f'SELECT action,detail FROM audit WHERE entity_id=? AND action IN ({placeholders}) ORDER BY id DESC LIMIT 100',
-                            (job_id, *actions)):
+    condition = ' AND detail LIKE ?' if image_path is not None else ''
+    parameters = (job_id, *actions, *([_path_pattern(image_path)] if image_path is not None else []))
+    for row in conn.execute(f'SELECT id,action,detail FROM audit WHERE entity_id=? AND action IN ({placeholders})' + condition + ' ORDER BY id DESC LIMIT 100', parameters):
         try:
             detail = json.loads(row['detail'])
             if isinstance(detail, dict):
-                yield row['action'], detail
+                yield row['action'], dict(detail, event_id=row['id'])
         except (ValueError, TypeError):
             continue
 
@@ -74,7 +80,7 @@ def authorize(conn, job_id, config, actor):
         raise ValueError('La lectura requiere un aviso pendiente con imagen.')
     digest = hashlib.sha256(image_bytes(conn, config, row['image_path'])).hexdigest()
     # Un permiso previo no autoriza un archivo distinto.
-    if not any(data.get('image_hash') == digest for _, data in _details(conn, job_id, ('ocr_authorized',))):
+    if not any(data.get('image_hash') == digest for _, data in _details(conn, job_id, ('ocr_authorized',), row['image_path'])):
         with conn:
             _event(conn, job_id, 'ocr_authorized', {'image_hash': digest, 'image_path': row['image_path'],
                     'provider': 'google_vision'}, actor)
@@ -82,10 +88,59 @@ def authorize(conn, job_id, config, actor):
 
 
 def result_for(conn, job_id, image_path):
-    for action, detail in _details(conn, job_id, ACTIONS):
+    if not image_path:
+        return None
+    for action, detail in _details(conn, job_id, ACTIONS, image_path):
         if detail.get('image_path') == image_path:
             return dict(detail, status={'ocr_reserved': 'reserved', 'ocr_completed': 'completed', 'ocr_failed': 'failed'}[action])
     return None
+
+
+def _path_pattern(image_path):
+    if not isinstance(image_path, str) or not re.fullmatch(r'(?:[0-9a-f]{48}|[0-9a-f]{64})\.jpg', image_path):
+        # Ninguna referencia externa puede introducir comodines en el filtro.
+        return '%"image_path": "referencia-no-compatible"%'
+    return '%"image_path": "' + image_path + '"%'
+
+
+def attempts(conn, job_id, image_path):
+    return conn.execute("SELECT count(*) FROM audit WHERE entity_id=? AND action='ocr_reserved' AND detail LIKE ?",
+                        (job_id, _path_pattern(image_path))).fetchone()[0]
+
+
+def retry_available(conn, job_id, image_path):
+    result = result_for(conn, job_id, image_path)
+    return bool(result and result['status'] == 'failed'
+                and result.get('error_code') in extraction.REJECTED_CODES
+                and attempts(conn, job_id, image_path) < 3)
+
+
+def _retry_ticket(conn, job_id, image_path, digest, result):
+    if not result or not retry_available(conn, job_id, image_path) or result.get('image_hash') != digest:
+        return None
+    for _, ticket in _details(conn, job_id, ('ocr_retry_authorized',), image_path):
+        if (ticket.get('failed_event_id') == result['event_id'] and ticket.get('image_hash') == digest
+                and ticket['event_id'] > result['event_id']):
+            return ticket
+    return None
+
+
+def authorize_retry(conn, job_id, config, failed_event_id, actor):
+    """Autoriza un rechazo concreto; nunca borra reservas ni reenvía una lectura incierta."""
+    with conn:
+        db.editorial_lock(conn)
+        job = conn.execute('SELECT image_path,status FROM jobs WHERE id=?', (job_id,)).fetchone()
+        if not job or job['status'] != 'pending' or not retry_available(conn, job_id, job['image_path']):
+            raise ValueError('Solo se puede reintentar un rechazo de acceso de un aviso pendiente, hasta tres intentos por imagen.')
+        result = result_for(conn, job_id, job['image_path'])
+        if failed_event_id != result['event_id']:
+            raise ValueError('El resultado cambió. Recargá el aviso antes de solicitar otro intento.')
+        digest = hashlib.sha256(image_bytes(conn, config, job['image_path'])).hexdigest()
+        if digest != result.get('image_hash'):
+            raise ValueError('La imagen cambió; esta autorización no corresponde al archivo actual.')
+        if not _retry_ticket(conn, job_id, job['image_path'], digest, result):
+            _event(conn, job_id, 'ocr_retry_authorized', {'image_path': job['image_path'], 'image_hash': digest,
+                    'failed_event_id': result['event_id'], 'provider': 'google_vision'}, actor)
 
 
 def usage(conn):
@@ -124,21 +179,29 @@ def process(conn, config, *, deadline=None):
             return dict(result, budget_exhausted=True)
         job = dict(row)
         existing = result_for(conn, job['id'], job['image_path'])
-        if existing:
-            result['skipped'] += 1
-            continue
         try:
             content = image_bytes(conn, config, job['image_path'])
         except (ValueError, OSError):
             result['skipped'] += 1
             continue
         digest = hashlib.sha256(content).hexdigest()
-        if not any(detail.get('image_hash') == digest for _, detail in _details(conn, job['id'], ('ocr_authorized',))):
+        if not any(detail.get('image_hash') == digest for _, detail in _details(conn, job['id'], ('ocr_authorized',), job['image_path'])):
+            result['skipped'] += 1
+            continue
+        ticket = _retry_ticket(conn, job['id'], job['image_path'], digest, existing) if existing else None
+        if existing and not ticket:
             result['skipped'] += 1
             continue
         reservation = {'image_hash': digest, 'image_path': job['image_path'], 'provider': 'google_vision'}
+        if ticket:
+            reservation.update(retry_event_id=ticket['event_id'], failed_event_id=existing['event_id'])
         # Confirmar reserva ANTES de consultar; sobrevivirá a cortes o reinicios.
         with conn:
+            db.editorial_lock(conn)
+            current = conn.execute('SELECT status,image_path FROM jobs WHERE id=?', (job['id'],)).fetchone()
+            if not current or current['status'] != 'pending' or current['image_path'] != job['image_path']:
+                result['skipped'] += 1
+                continue
             _event(conn, job['id'], 'ocr_reserved', reservation)
         result['processed'] += 1
         try:

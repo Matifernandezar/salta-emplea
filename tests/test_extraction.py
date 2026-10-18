@@ -1,6 +1,7 @@
 """OCR sustituido: estas pruebas nunca envían imágenes ni consumen un proveedor."""
 
 import base64
+import io
 import json
 from urllib.error import HTTPError, URLError
 
@@ -180,6 +181,182 @@ def test_errores_del_json_no_se_usan_como_texto_ni_se_exponen(payload):
         extraction.extract_image(PNG, KEY, opener=lambda *args, **kwargs: Response(payload))
     assert error.value.code == "provider_rejected"
     assert KEY not in str(error.value)
+
+
+def google_rejection(reason, **changes):
+    detail = {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "domain": "googleapis.com",
+        "reason": reason,
+        "metadata": {"key": KEY, "consumer": "projects/999999999", "url": "https://example.org/" + KEY},
+    }
+    detail.update(changes)
+    return {"code": 7, "message": KEY, "details": [detail]}
+
+
+@pytest.mark.parametrize(("reason", "expected"), [
+    ("API_KEY_INVALID", "api_key_invalid"),
+    ("API_KEY_EXPIRED", "api_key_expired"),
+    ("API_KEY_SERVICE_BLOCKED", "api_key_restricted"),
+    ("API_KEY_HTTP_REFERRER_BLOCKED", "api_key_restricted"),
+    ("API_KEY_IP_ADDRESS_BLOCKED", "api_key_restricted"),
+    ("API_KEY_ANDROID_APP_BLOCKED", "api_key_restricted"),
+    ("API_KEY_IOS_APP_BLOCKED", "api_key_restricted"),
+    ("SERVICE_DISABLED", "service_disabled"),
+    ("BILLING_DISABLED", "billing_disabled"),
+])
+@pytest.mark.parametrize("transport", ["http_error", "response", "json_error", "json_item"])
+def test_rechazos_documentados_se_clasifican_sin_copiar_datos_externos(reason, expected, transport):
+    payload = {"error": google_rejection(reason)}
+    status = 400 if reason == "API_KEY_INVALID" else 403
+    calls = []
+    if transport == "json_item":
+        payload = {"responses": [payload]}
+    response = Response(payload, status=status if transport == "response" else 200)
+    error_body = io.BytesIO(json.dumps(payload).encode())
+
+    def opener(*args, **kwargs):
+        calls.append(1)
+        if transport == "http_error":
+            raise HTTPError("https://example.org/" + KEY, status, KEY, {}, error_body)
+        return response
+
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=opener)
+    assert error.value.code == expected
+    assert expected in extraction.REJECTED_CODES
+    assert KEY not in str(error.value)
+    assert "999999999" not in str(error.value)
+    assert "https://example.org/" not in str(error.value)
+    assert error.value.__cause__ is None
+    assert calls == [1]
+    if transport == "http_error":
+        assert error_body.closed
+    else:
+        assert response.closed
+        expected_limit = extraction.MAX_ERROR_RESPONSE_BYTES + 1 if transport == "response" else extraction.MAX_RESPONSE_BYTES + 1
+        assert response.read_limits == [expected_limit]
+
+
+@pytest.mark.parametrize("detail", [
+    {"reason": "API_KEY_INVALID"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID"},
+    {"@type": "google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": "API_KEY_INVALID"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "GoogleApis.com", "reason": "API_KEY_INVALID"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com.attacker.test", "reason": "API_KEY_INVALID"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": "api_key_invalid"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": "API_KEY_INVALID\n"},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": ["API_KEY_INVALID"]},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": "UNKNOWN", "metadata": {"reason": "API_KEY_INVALID"}},
+    {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "domain": "googleapis.com", "reason": "UNRECOGNIZED", "message": "API_KEY_INVALID"},
+    "API_KEY_INVALID", None,
+])
+def test_solo_errorinfo_de_google_con_razon_exacta_puede_clasificar_un_rechazo(detail):
+    payload = {"error": {"code": 403, "message": "API_KEY_INVALID " + KEY, "details": [detail]}}
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=lambda *args, **kwargs: Response(payload, status=403))
+    assert error.value.code == "credentials_rejected"
+    assert KEY not in str(error.value)
+
+
+@pytest.mark.parametrize("provider_code", [7, 16, 401, 403])
+def test_los_codigos_del_json_no_se_confunden_con_estados_http(provider_code):
+    response = Response({"responses": [{"error": {"code": provider_code, "message": KEY}}]})
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=lambda *args, **kwargs: response)
+    assert error.value.code == "provider_rejected"
+
+
+def test_rechazos_con_razones_contradictorias_requieren_revisar_sin_elegir_una():
+    payload = {"error": google_rejection("API_KEY_INVALID")}
+    payload["error"]["details"].extend(google_rejection("BILLING_DISABLED")["details"])
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=lambda *args, **kwargs: Response(payload, status=403))
+    assert error.value.code == "credentials_rejected"
+
+
+@pytest.mark.parametrize("raw", [
+    b"no es JSON", b"\xff", b"null", b"[]", b'{"error":NaN}',
+    b'{"error":{"details":[]},"error":{"details":[]}}',
+    b'{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","domain":"googleapis.com","reason":"API_KEY_INVALID","reason":"BILLING_DISABLED"}]}}',
+])
+@pytest.mark.parametrize("transport", ["http_error", "response"])
+def test_cuerpos_de_error_invalidos_conservan_el_rechazo_http_sin_interpretarlos(raw, transport):
+    body = io.BytesIO(raw)
+    response = Response(raw=raw, status=403)
+
+    def opener(*args, **kwargs):
+        if transport == "http_error":
+            raise HTTPError("https://example.org/" + KEY, 403, KEY, {}, body)
+        return response
+
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=opener)
+    assert error.value.code == "credentials_rejected"
+    assert KEY not in str(error.value)
+    assert body.closed if transport == "http_error" else response.closed
+
+
+@pytest.mark.parametrize("transport", ["http_error", "response", "json_item"])
+@pytest.mark.parametrize("extra_byte", [False, True])
+def test_cuerpos_de_rechazo_excesivos_no_se_clasifican_y_se_leen_con_limite(transport, extra_byte):
+    payload = {"error": google_rejection("API_KEY_INVALID")}
+    if transport == "json_item":
+        payload = {"responses": [payload]}
+    raw = json.dumps(payload).encode()
+    raw += b" " * (extraction.MAX_ERROR_RESPONSE_BYTES - len(raw) + int(extra_byte))
+    response = Response(raw=raw, status=403 if transport == "response" else 200)
+
+    class TrackedBody(io.BytesIO):
+        def __init__(self, value):
+            super().__init__(value)
+            self.limits = []
+
+        def read(self, size):
+            self.limits.append(size)
+            return super().read(size)
+
+    body = TrackedBody(raw)
+
+    def opener(*args, **kwargs):
+        if transport == "http_error":
+            raise HTTPError("https://example.org/" + KEY, 403, KEY, {}, body)
+        return response
+
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=opener)
+    fallback = "provider_rejected" if transport == "json_item" else "credentials_rejected"
+    assert error.value.code == (fallback if extra_byte else "api_key_invalid")
+    if transport == "http_error":
+        assert body.limits == [extraction.MAX_ERROR_RESPONSE_BYTES + 1]
+        assert body.closed
+    elif transport == "response":
+        assert response.read_limits == [extraction.MAX_ERROR_RESPONSE_BYTES + 1]
+
+
+def test_fallo_al_leer_el_cuerpo_no_oculta_un_rechazo_http_confirmado():
+    class BrokenBody(io.BytesIO):
+        def read(self, size):
+            raise TimeoutError(KEY)
+
+    body = BrokenBody()
+
+    def opener(*args, **kwargs):
+        raise HTTPError("https://example.org/" + KEY, 401, KEY, {}, body)
+
+    with pytest.raises(extraction.ExtractionError) as error:
+        extraction.extract_image(PNG, KEY, opener=opener)
+    assert error.value.code == "credentials_rejected"
+    assert KEY not in str(error.value)
+    assert body.closed
+
+
+def test_solo_rechazos_inequivocos_permiten_un_nuevo_intento_explicito():
+    assert extraction.REJECTED_CODES == frozenset({
+        "credentials_rejected", "api_key_invalid", "api_key_expired",
+        "api_key_restricted", "service_disabled", "billing_disabled",
+    })
+    assert not {"provider_rejected", "network_error", "timeout", "quota_exceeded", "provider_unavailable"} & extraction.REJECTED_CODES
 
 
 def test_ocr_vacio_y_texto_largo_se_senalan_para_revision():

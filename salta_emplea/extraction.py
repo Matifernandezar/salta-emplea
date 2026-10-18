@@ -19,6 +19,7 @@ from .domain import application_url
 VISION_URL = "https://vision.googleapis.com/v1/images:annotate"
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+MAX_ERROR_RESPONSE_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 20000
 REQUEST_TIMEOUT = 20
 
@@ -29,13 +30,38 @@ _ERROR_MESSAGES = {
     "invalid_response": "El proveedor devolvió una respuesta que requiere revisión.",
     "response_too_large": "La respuesta del proveedor excede el máximo permitido.",
     "redirect_rejected": "El proveedor intentó redirigir la solicitud.",
-    "credentials_rejected": "El proveedor rechazó la credencial configurada.",
+    "credentials_rejected": "Google rechazó el acceso. Revisá que Cloud Vision API y la facturación estén activas en el proyecto de la clave, y comprobá sus restricciones.",
+    "api_key_invalid": "Google indicó que la clave no es válida. Revisá GOOGLE_VISION_API_KEY en Vercel y redesplegá la aplicación.",
+    "api_key_expired": "Google indicó que la clave venció. Reemplazá GOOGLE_VISION_API_KEY en Vercel y redesplegá la aplicación.",
+    "api_key_restricted": "Las restricciones de la clave impiden usar Vision. Revisá en Google Cloud que permitan Cloud Vision API y llamadas desde el servidor de Vercel.",
+    "service_disabled": "Cloud Vision API está deshabilitada para el proyecto de la clave. Habilitala en ese proyecto de Google Cloud.",
+    "billing_disabled": "Google indicó que la facturación del proyecto de la clave está deshabilitada. Revisá su cuenta de facturación en Google Cloud.",
     "quota_exceeded": "El proveedor indicó un límite de uso.",
     "provider_unavailable": "El proveedor no está disponible.",
     "provider_rejected": "El proveedor no pudo procesar la imagen.",
     "network_error": "No se pudo completar la conexión con el proveedor.",
     "timeout": "La lectura de la imagen superó el tiempo máximo.",
     "invalid_text": "El texto recibido no tiene un formato válido.",
+}
+
+# Estos rechazos pueden volver a intentarse únicamente mediante una acción
+# explícita, una vez corregida la configuración. No implican un reintento
+# automático ni permiten deducir nada del texto libre recibido del proveedor.
+REJECTED_CODES = frozenset({
+    "credentials_rejected", "api_key_invalid", "api_key_expired",
+    "api_key_restricted", "service_disabled", "billing_disabled",
+})
+
+_GOOGLE_REJECTION_REASONS = {
+    "API_KEY_INVALID": "api_key_invalid",
+    "API_KEY_EXPIRED": "api_key_expired",
+    "API_KEY_SERVICE_BLOCKED": "api_key_restricted",
+    "API_KEY_HTTP_REFERRER_BLOCKED": "api_key_restricted",
+    "API_KEY_IP_ADDRESS_BLOCKED": "api_key_restricted",
+    "API_KEY_ANDROID_APP_BLOCKED": "api_key_restricted",
+    "API_KEY_IOS_APP_BLOCKED": "api_key_restricted",
+    "SERVICE_DISABLED": "service_disabled",
+    "BILLING_DISABLED": "billing_disabled",
 }
 
 
@@ -122,6 +148,48 @@ def _invalid_json_constant(value):
     raise ValueError("invalid_constant")
 
 
+def _provider_rejection(error, fallback="provider_rejected"):
+    """Clasifica exclusivamente ErrorInfo oficiales; descarta texto y metadata.
+
+    Los códigos numéricos del cuerpo corresponden al proveedor, no al estado
+    HTTP. Tampoco se buscan palabras dentro de mensajes, URLs o metadatos.
+    """
+    if not isinstance(error, dict) or not isinstance(error.get("details"), list):
+        return fallback
+    codes = set()
+    for detail in error["details"]:
+        if not isinstance(detail, dict):
+            continue
+        if (detail.get("@type") != "type.googleapis.com/google.rpc.ErrorInfo"
+                or detail.get("domain") != "googleapis.com"):
+            continue
+        reason = detail.get("reason")
+        if not isinstance(reason, str) or reason not in _GOOGLE_REJECTION_REASONS:
+            continue
+        codes.add(_GOOGLE_REJECTION_REASONS[reason])
+    return next(iter(codes)) if len(codes) == 1 else fallback
+
+
+def _http_response_error(response, status):
+    """Lee como máximo 64 KiB más un byte testigo, sin exponer el cuerpo."""
+    fallback = _http_error(status)
+    if not isinstance(status, int) or status < 400:
+        return fallback
+    try:
+        raw = response.read(MAX_ERROR_RESPONSE_BYTES + 1)
+        if not isinstance(raw, bytes) or len(raw) > MAX_ERROR_RESPONSE_BYTES:
+            return fallback
+        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_json_object,
+                             parse_constant=_invalid_json_constant)
+        if isinstance(payload, dict):
+            return _provider_rejection(payload.get("error"), fallback)
+    except Exception:
+        # El error HTTP ya está confirmado. Un cuerpo ilegible, vacío o que
+        # falla al leer no lo convierte en un fallo ambiguo de transporte.
+        pass
+    return fallback
+
+
 def extract_image(image_bytes, api_key, *, opener=None):
     """Transcribe una imagen mediante una única solicitud explícita de Vision.
 
@@ -154,12 +222,12 @@ def extract_image(image_bytes, api_key, *, opener=None):
         with open_request(request, timeout=REQUEST_TIMEOUT) as response:
             status = response.getcode()
             if status != 200:
-                raise ExtractionError(_http_error(status))
+                raise ExtractionError(_http_response_error(response, status))
             raw = response.read(MAX_RESPONSE_BYTES + 1)
     except ExtractionError:
         raise
     except HTTPError as exc:
-        code = _http_error(exc.code)
+        code = _http_response_error(exc, exc.code)
         exc.close()
         raise ExtractionError(code) from None
     except TimeoutError:
@@ -182,13 +250,15 @@ def extract_image(image_bytes, api_key, *, opener=None):
     if not isinstance(payload, dict):
         raise ExtractionError("invalid_response")
     if "error" in payload:
-        raise ExtractionError("provider_rejected")
+        code = _provider_rejection(payload["error"]) if len(raw) <= MAX_ERROR_RESPONSE_BYTES else "provider_rejected"
+        raise ExtractionError(code)
     responses = payload.get("responses")
     if not isinstance(responses, list) or len(responses) != 1 or not isinstance(responses[0], dict):
         raise ExtractionError("invalid_response")
     item = responses[0]
     if "error" in item:
-        raise ExtractionError("provider_rejected")
+        code = _provider_rejection(item["error"]) if len(raw) <= MAX_ERROR_RESPONSE_BYTES else "provider_rejected"
+        raise ExtractionError(code)
     annotation = item.get("fullTextAnnotation", {})
     if not isinstance(annotation, dict):
         raise ExtractionError("invalid_response")

@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
-from salta_emplea import db
+from salta_emplea import db, extraction
 from salta_emplea.app import create_app
 
 PASSWORD = 'PRUEBA-contraseña-ficticia-solo-navegador'
@@ -196,7 +196,7 @@ def run_circuit(browser, viewport):
 
 
 def run_image_circuit(browser, viewport):
-    """Imagen propia de PRUEBA y proveedor sustituido; no envía nada a Google."""
+    """Imagen PRUEBA, rechazo y reintento con proveedor sustituido; sin Google real."""
     title = 'PRUEBA — Operador de comercio desde imagen'
     literal_text = (
         f'Puesto: {title}\nEmpresa: PRUEBA Comercio ficticio\n'
@@ -220,13 +220,15 @@ def run_image_circuit(browser, viewport):
         with Image.open(BytesIO(content)) as received:
             received.verify()
         provider_calls.append(len(content))
+        if len(provider_calls) == 1:
+            raise extraction.ExtractionError('credentials_rejected')
         return {'text': literal_text, 'provider': 'google_vision', 'warnings': []}
 
     with isolated_server() as (app, origin), patch(
             'salta_emplea.extraction.extract_image', side_effect=substituted_ocr):
         # Sólo este servidor local usa la configuración productiva con credencial
         # ficticia; el proveedor está sustituido y las cookies quedan en HTTP local.
-        app.config.update(APP_ENV='production', OCR_ENABLED='1', OCR_MONTHLY_LIMIT=2,
+        app.config.update(APP_ENV='production', OCR_ENABLED='1', OCR_MONTHLY_LIMIT=3,
                           GOOGLE_VISION_API_KEY='PRUEBA-google-vision-ficticia',
                           SESSION_COOKIE_SECURE=False)
         settings = {'viewport': viewport, 'is_mobile': viewport['width'] < 600,
@@ -292,12 +294,36 @@ def run_image_circuit(browser, viewport):
             expect(page.get_by_role('status')).to_contain_text('Corrida registrada')
             assert len(provider_calls) == 1
             page.goto(f'{origin}/admin/ofertas/{job_id}')
+            expect(page.locator('.notice-error').filter(has_text='Google rechazó el acceso.')).to_be_visible()
+            expect(page.locator('[name="title"]')).to_have_value('Aviso pendiente de transcripción')
+            expect(page.locator('[name="application_url"]')).to_have_value('')
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_be_visible()
+            no_horizontal_overflow(page)
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 1
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_failed'")) == 1
+            assert not rows(app, "SELECT id FROM audit WHERE action='ocr_completed'")
+            # Consultar o recargar el resultado no concede permiso para reenviar.
+            page.reload()
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_be_visible()
+            assert len(provider_calls) == 1
+            retry = page.locator('form').filter(has=page.get_by_role(
+                'button', name='Reintentar lectura tras corregir Google'))
+            assert int(retry.locator('[name="failed_event_id"]').input_value()) > 0
+            retry.locator('[name="configuration_checked"]').check()
+            retry.locator('[name="allow_ocr"]').check()
+            retry.get_by_role('button', name='Reintentar lectura tras corregir Google').click()
+            expect(page.get_by_role('status')).to_contain_text('Reintento registrado')
+            assert len(provider_calls) == 2
             expect(page.locator('[name="title"]')).to_have_value(title)
             expect(page.locator('[name="application_url"]')).to_have_value(APPLICATION)
             expect(page.get_by_text('Pendiente de revisión', exact=True)).to_be_visible()
             expect(page.get_by_text('Lectura recibida.', exact=False)).to_be_visible()
             expect(page.get_by_role('button', name='Leer imagen y preparar datos')).to_have_count(0)
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_have_count(0)
             no_horizontal_overflow(page)
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 2
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_failed'")) == 1
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_completed'")) == 1
             current = rows(app, 'SELECT title,application_url,status,original_text FROM jobs')[0]
             assert current['title'] == title and current['application_url'] == APPLICATION
             assert current['status'] == 'pending' and not current['original_text']
@@ -307,8 +333,9 @@ def run_image_circuit(browser, viewport):
             page.goto(origin + '/admin/automatizacion')
             page.get_by_role('button', name='Leer imágenes autorizadas').click()
             expect(page.get_by_role('status')).to_contain_text('Corrida registrada')
-            assert len(provider_calls) == 1
-            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 1
+            assert len(provider_calls) == 2
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 2
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_failed'")) == 1
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_completed'")) == 1
             assert rows(app, 'SELECT status FROM jobs')[0]['status'] == 'pending'
 
@@ -331,7 +358,7 @@ def run_image_circuit(browser, viewport):
             popup.value.close()
             assert not unexpected, f'La app intentó acceder a destinos externos: {unexpected}'
             print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; imagen privada, '
-                  'preparación pendiente, aprobación e idempotencia. '
+                  'rechazo de acceso, reintento manual, preparación pendiente, aprobación e idempotencia. '
                   'Proveedor OCR sustituido, no demuestra lectura real.')
         finally:
             public_context.close()

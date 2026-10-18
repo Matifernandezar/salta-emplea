@@ -1,5 +1,15 @@
 # Resultado por fase
 
+## Diagnóstico de rechazo y recuperación de lectura — 18/10/2026
+
+El titular configuró Google Cloud Vision y eligió un cupo de 999 intentos mensuales. Se guardó la activación y ese cupo sin leer la clave, y se redesplegó el commit `b98d198` como `dpl_BMK5fkrrVE8aR5r14xkvHFRfGyhM`, READY. El formulario mostró consentimiento OCR, la salud SQL respondió correctamente y el cron siguió denegando solicitudes sin credencial. Esto confirmó configuración, no reconocimiento real.
+
+La captura posterior del titular mostró `credentials_rejected`. El adaptador anterior agrupaba HTTP 401/403 y descartaba su causa; no es posible reconstruir ese detalle del registro viejo. El titular indicó que aún no había comprobado API y facturación en Google Cloud. Esa configuración externa y una lectura real exitosa siguen pendientes.
+
+Se agregaron diagnósticos a partir de razones oficiales de una lista cerrada, sin guardar mensajes, claves, proyectos ni URLs del proveedor. Se permite solicitar un reintento explícito únicamente tras rechazo de acceso; queda ligado al fallo, imagen y hash, requiere administrador, CSRF y reconocimiento de configuración, admite tres intentos por imagen y conserva el cupo y el historial. Resultados inciertos y lecturas completadas continúan bloqueados. La búsqueda del historial ahora filtra el archivo antes de limitar filas para no olvidar reservas antiguas.
+
+La validación con proveedores sustituidos y el despliegue de esta corrección se registran al completarse. No se hizo una nueva llamada real a Google ni se aprobó contenido en producción durante el diagnóstico.
+
 ## Fuentes elegidas y preparación de imágenes — 18/10/2026
 
 Se verificaron los límites de las fuentes elegidas: Instagram @empleosalta12 pertenece a un tercero; su tipo y el acceso a medios no quedaron comprobados. La documentación específica de Meta respondió 429; el aviso legal de Computrabajo quedó detrás de una comprobación de acceso; LinkedIn restringe scraping y su API de publicación no equivale a búsqueda de ofertas. Se prepararon tres referencias manuales sin autorización, habilitación ni consultas. No se contactó a sus titulares.

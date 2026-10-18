@@ -247,3 +247,113 @@ def test_pasted_text_does_not_replace_explicit_manual_fields(setup):
     job = conn.execute('SELECT * FROM jobs').fetchone()
     assert (job['title'], job['company'], job['application_url']) == (
         'PRUEBA — Puesto corregido', 'Empresa corregida', 'https://example.test/manual')
+
+
+def failed_reading(app, conn, monkeypatch, code='credentials_rejected'):
+    job_id, name = add_image(app, conn)
+    image_pipeline.authorize(conn, job_id, app.config, 'administrador-prueba')
+    def reject(*_a): raise extraction.ExtractionError(code)
+    monkeypatch.setattr(extraction, 'extract_image', reject)
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['errors'] == 1
+    return job_id, name, image_pipeline.result_for(conn, job_id, name)
+
+
+def test_rejected_reading_needs_explicit_ticket_and_replay_sends_once(setup, monkeypatch):
+    app, conn, _ = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch)
+    calls = []; provider(monkeypatch, calls)
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['processed'] == 0
+    for _ in range(2):
+        image_pipeline.authorize_retry(conn, job_id, config(app), failed['event_id'], 'administrador')
+    assert conn.execute("SELECT count(*) FROM audit WHERE action='ocr_retry_authorized'").fetchone()[0] == 1
+    assert image_pipeline.status(conn, config(app))['pending'] == 1
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['prepared'] == 1
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['processed'] == 0
+    assert len(calls) == 1 and image_pipeline.usage(conn) == 2
+    assert image_pipeline.result_for(conn, job_id, name)['status'] == 'completed'
+    assert domain.public_jobs(conn) == []
+    with pytest.raises(ValueError):
+        image_pipeline.authorize_retry(conn, job_id, config(app), failed['event_id'], 'administrador')
+
+
+@pytest.mark.parametrize('code', ['network_error', 'timeout', 'invalid_response', 'provider_rejected',
+                                 'processing_failed', 'provider_unavailable', 'quota_exceeded'])
+def test_uncertain_failures_never_allow_retry(setup, monkeypatch, code):
+    app, conn, _ = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch, code)
+    assert not image_pipeline.retry_available(conn, job_id, name)
+    with pytest.raises(ValueError): image_pipeline.authorize_retry(conn, job_id, config(app), failed['event_id'], 'administrador')
+    assert image_pipeline.usage(conn) == 1
+
+
+def test_retry_ticket_is_bound_to_failure_and_max_three_total_attempts(setup, monkeypatch):
+    app, conn, _ = setup
+    job_id, name, first = failed_reading(app, conn, monkeypatch)
+    with pytest.raises(ValueError): image_pipeline.authorize_retry(conn, job_id, config(app), first['event_id']+1, 'administrador')
+    image_pipeline.authorize_retry(conn, job_id, config(app), first['event_id'], 'administrador')
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['errors'] == 1
+    with pytest.raises(ValueError): image_pipeline.authorize_retry(conn, job_id, config(app), first['event_id'], 'administrador')
+    second = image_pipeline.result_for(conn, job_id, name)
+    image_pipeline.authorize_retry(conn, job_id, config(app), second['event_id'], 'administrador')
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['errors'] == 1
+    third = image_pipeline.result_for(conn, job_id, name)
+    assert not image_pipeline.retry_available(conn, job_id, name)
+    with pytest.raises(ValueError): image_pipeline.authorize_retry(conn, job_id, config(app), third['event_id'], 'administrador')
+    assert image_pipeline.attempts(conn, job_id, name) == 3
+    assert image_pipeline.usage(conn) == 3
+
+
+def test_retry_never_resets_monthly_quota_or_uses_ticket_when_full(setup, monkeypatch):
+    app, conn, _ = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch)
+    cfg = config(app, OCR_MONTHLY_LIMIT=1)
+    image_pipeline.authorize_retry(conn, job_id, cfg, failed['event_id'], 'administrador')
+    calls = []; provider(monkeypatch, calls)
+    assert tasks.run_tasks(conn, cfg, only='extract')['images']['quota_reached'] is True
+    assert calls == [] and image_pipeline.usage(conn) == 1
+    cfg['OCR_MONTHLY_LIMIT'] = 2
+    assert tasks.run_tasks(conn, cfg, only='extract')['images']['prepared'] == 1
+    assert len(calls) == 1 and image_pipeline.usage(conn) == 2
+
+
+def test_old_failure_is_not_hidden_by_unrelated_image_events(setup, monkeypatch):
+    app, conn, _ = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch)
+    with conn:
+        for index in range(110):
+            image_pipeline._event(conn, job_id, 'ocr_completed', {'image_path': format(index,'064x')+'.jpg'})
+    assert image_pipeline.result_for(conn, job_id, name)['event_id'] == failed['event_id']
+    assert image_pipeline.retry_available(conn, job_id, name)
+    assert tasks.run_tasks(conn, config(app), only='extract')['images']['processed'] == 0
+
+
+def test_rejected_retry_does_not_accept_changed_hash_or_non_pending_offer(setup, monkeypatch):
+    app, conn, _ = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch)
+    original = (Path(app.config['UPLOAD_DIR']) / name).read_bytes()
+    (Path(app.config['UPLOAD_DIR']) / name).write_bytes(original + b'contenido-distinto')
+    with pytest.raises(ValueError, match='imagen cambió'):
+        image_pipeline.authorize_retry(conn, job_id, config(app), failed['event_id'], 'administrador')
+    (Path(app.config['UPLOAD_DIR']) / name).write_bytes(original)
+    domain.transition_job(conn, job_id, 'reject', 'administrador')
+    with pytest.raises(ValueError): image_pipeline.authorize_retry(conn, job_id, config(app), failed['event_id'], 'administrador')
+
+
+def test_manual_retry_endpoint_requires_admin_csrf_consent_and_current_failure(setup, monkeypatch):
+    app, conn, admin = setup
+    job_id, name, failed = failed_reading(app, conn, monkeypatch)
+    app.config.update(config(app))
+    path = f'/admin/ofertas/{job_id}/reintentar-lectura'
+    data = {'csrf_token':'csrf-prueba', 'failed_event_id':str(failed['event_id']), 'allow_ocr':'1', 'configuration_checked':'1'}
+    assert admin.get(path).status_code == 405
+    assert admin.post(path, data={k:v for k,v in data.items() if k!='csrf_token'}).status_code == 400
+    assert admin.post(path, data={k:v for k,v in data.items() if k!='allow_ocr'}).status_code == 400
+    assert admin.post(path, data={k:v for k,v in data.items() if k!='configuration_checked'}).status_code == 400
+    public = app.test_client()
+    with public.session_transaction() as state: state['csrf'] = 'publico'
+    assert public.post(path, data=dict(data, csrf_token='publico')).location.endswith('/admin/ingresar')
+    calls = []; provider(monkeypatch, calls)
+    assert admin.post(path, data=data).status_code == 302
+    assert admin.post(path, data=data).status_code == 302
+    assert len(calls) == 1 and image_pipeline.usage(conn) == 2
+    assert image_pipeline.result_for(conn, job_id, name)['status'] == 'completed'

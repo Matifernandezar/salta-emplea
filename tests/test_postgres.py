@@ -329,3 +329,43 @@ def test_postgres_edits_and_approvals_share_editorial_lock(postgres):
                 with pytest.raises(FutureTimeout): future.result(timeout=0.15)
             future.result(timeout=5)
     assert owner.execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] == 'approved'
+
+
+def test_postgres_rejected_image_retry_is_private_serialized_and_consumed_once(postgres, monkeypatch):
+    import hashlib
+    import io
+    from PIL import Image
+    from salta_emplea import extraction, image_pipeline, tasks
+
+    target, connect = postgres
+    first, second = connect(), connect()
+    buffer = io.BytesIO()
+    Image.new('RGB', (80,80), 'green').save(buffer, 'JPEG')
+    image = buffer.getvalue()
+    name = hashlib.sha256(image).hexdigest() + '.jpg'
+    with first:
+        first.execute('INSERT INTO uploads(name,data,created_at) VALUES (?,?,?)', (name,image,domain.now()))
+    job_id, _ = domain.create_job(first, {'title':'Aviso pendiente de transcripción','image_path':name})
+    config = {'DATABASE_TARGET':target, 'APP_ENV':'production', 'OCR_ENABLED':'1',
+              'GOOGLE_VISION_API_KEY':'clave-ficticia-no-productiva', 'OCR_MONTHLY_LIMIT':999,
+              'SECRET_KEY':'secreto-ficticio-solo-pruebas'}
+    image_pipeline.authorize(first,job_id,config,'administrador-prueba')
+    calls = []
+    def extract(*_a):
+        calls.append(1)
+        if len(calls)==1: raise extraction.ExtractionError('credentials_rejected')
+        return {'text':'Puesto: PRUEBA — Reintento\nCorreo: prueba@example.test','warnings':[]}
+    monkeypatch.setattr(extraction,'extract_image',extract)
+    assert tasks.run_tasks(first,config,only='extract')['images']['errors']==1
+    failed = image_pipeline.result_for(second,job_id,name)
+    image_pipeline.authorize_retry(second,job_id,config,failed['event_id'],'administrador-prueba')
+    assert image_pipeline.status(first,config)['pending']==1
+    with db.task_lock(first,tasks.TASK_LOCK_NAME) as acquired:
+        assert acquired
+        assert 'skipped' in tasks.run_tasks(second,config,only='extract')
+    assert tasks.run_tasks(second,config,only='extract')['images']['prepared']==1
+    assert tasks.run_tasks(first,config,only='extract')['images']['processed']==0
+    assert calls==[1,1] and image_pipeline.usage(first)==2
+    assert image_pipeline.result_for(first,job_id,name)['status']=='completed'
+    job = first.execute('SELECT status,approved_at FROM jobs WHERE id=?',(job_id,)).fetchone()
+    assert job['status']=='pending' and job['approved_at'] is None and domain.public_jobs(first)==[]

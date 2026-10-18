@@ -453,9 +453,43 @@ def create_app(config=None):
                 and (payload[field] is None or isinstance(payload[field], str))
             }
         duplicates = [row_dict(r) for r in connection().execute('SELECT * FROM jobs WHERE id<>? AND lower(title)=lower(?) LIMIT 10', (job_id, job['title']))]
+        image_result = image_pipeline.result_for(connection(), job_id, job.get('image_path'))
         return render_template('edit.html', job=job, duplicates=duplicates, provenance=provenance,
                                image_status=image_pipeline.status(connection(), app.config),
-                               image_result=image_pipeline.result_for(connection(), job_id, job.get('image_path')))
+                               image_result=image_result,
+                               image_error_message=str(extraction.ExtractionError(image_result.get('error_code'))) if image_result and image_result['status'] == 'failed' else '',
+                               image_retry_available=job['status'] == 'pending' and image_pipeline.retry_available(connection(), job_id, job.get('image_path')))
+
+    @app.post('/admin/ofertas/<int:job_id>/reintentar-lectura')
+    @admin_required
+    def admin_retry_image(job_id):
+        limited('admin_automation', 6, 600)
+        if request.form.get('allow_ocr') != '1' or request.form.get('configuration_checked') != '1':
+            abort(400, 'Confirmá el permiso y que revisaste la configuración de Google antes de reintentar.')
+        if not image_pipeline.configured(app.config):
+            flash('La lectura está pendiente de configuración. No se envió ninguna imagen.', 'error')
+            return redirect(url_for('admin_edit', job_id=job_id))
+        from . import tasks
+        try:
+            submitted_id = request.form.get('failed_event_id', '')
+            if not submitted_id.isascii() or not submitted_id.isdecimal() or len(submitted_id) > 20:
+                raise ValueError('Recargá el aviso para obtener el resultado de lectura vigente.')
+            failed_event_id = int(submitted_id)
+            image_pipeline.authorize_retry(connection(), job_id, app.config, failed_event_id, 'administrador')
+            result = tasks.run_tasks(connection(), dict(app.config, OCR_JOB_ID=job_id, TASK_BUDGET_SECONDS=60), only='extract')
+            if result.get('images', {}).get('quota_reached'):
+                flash('Se alcanzó el límite mensual. La solicitud queda registrada sin enviar la imagen.', 'error')
+            elif result.get('skipped'):
+                flash('Hay otra tarea en ejecución. La autorización queda pendiente para el próximo lote.', 'success')
+            else:
+                flash('Reintento registrado. Revisá el resultado; el aviso no se aprueba automáticamente.', 'success')
+        except (ValueError, OSError) as exc:
+            flash(str(exc) if isinstance(exc, ValueError) else 'La imagen no está disponible.', 'error')
+        except Exception as exc:
+            connection().rollback()
+            app.logger.error('Falló el reintento de lectura (%s).', type(exc).__name__)
+            flash('No se pudo completar el reintento. Revisá el registro antes de volver a solicitarlo.', 'error')
+        return redirect(url_for('admin_edit', job_id=job_id))
 
     @app.post('/admin/ofertas/<int:job_id>/leer-imagen')
     @admin_required

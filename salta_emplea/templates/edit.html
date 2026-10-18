@@ -50,7 +50,7 @@
 <dl class="metadata-list">{% for field, extracted_value in (image_reading.fields or {}).items() %}<div><dt>{{ {'title':'Puesto','company':'Empresa','location':'Localidad','modality':'Modalidad','sector':'Rubro','schedule':'Jornada','contract_type':'Contratación','requirements':'Requisitos','description':'Descripción','application_url':'Postulación','original_date':'Fecha original','expires_at':'Vencimiento','salary_amount':'Sueldo','salary_currency':'Moneda','salary_period':'Período','salary_source_evidence':'Respaldo del sueldo'}.get(field, field) }}</dt><dd class="preserve-lines">{{ extracted_value|value }}{% if image_reading.evidence and image_reading.evidence.get(field) %}<small>Respaldo: {{ image_reading.evidence.get(field) }}</small>{% endif %}</dd></div>{% endfor %}</dl>
 {% if image_reading.uncertain_fields %}<p><strong>Revisar:</strong> {% if image_reading.uncertain_fields is string %}{{ image_reading.uncertain_fields }}{% else %}{{ image_reading.uncertain_fields|join(', ') }}{% endif %}.</p>{% endif %}
 </details>
-{% elif image_reading.status == 'failed' %}<p class="notice notice-error">No se pudo completar la lectura. Revisá la imagen y la configuración; podés continuar la revisión manual. {% if image_reading.error_code %}Referencia: {{ image_reading.error_code }}.{% endif %}</p>
+{% elif image_reading.status == 'failed' %}<p class="notice notice-error">{{ image_error_message|default('No se pudo completar la lectura. Revisá la configuración; podés continuar la revisión manual.', true) }} {% if image_reading.error_code %}Referencia: {{ image_reading.error_code }}.{% endif %}</p>
 {% elif image_reading.status == 'reserved' %}<p class="notice">Hay un intento de lectura registrado. Revisá el resultado antes de solicitar otra lectura.</p>{% endif %}
 {% endif %}
 {% if not image_state.ready %}<p class="small">La lectura automática no está habilitada o no tiene cupo. Podés transcribir los datos de la imagen.</p>{% endif %}
@@ -59,6 +59,15 @@
 <label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para enviar esta imagen a Google Cloud Vision para extraer texto.</span></label>
 <p class="small">La lectura puede contener errores. Prepara datos para revisar y conserva el original; nunca publica.</p>
 <button class="button button-outline" type="submit">Leer imagen y preparar datos</button>
+</form>{% endif %}
+{% if image_state.ready and image_retry_available|default(false) and image_reading %}
+<form action="{{ url_for('admin_retry_image', job_id=job.id) }}" method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="failed_event_id" value="{{ image_reading.event_id }}">
+<p class="small">Después de corregir el acceso en Google, podés solicitar otro intento. Se conserva el historial y cuenta para tu cupo mensual. Máximo tres intentos por imagen; una lectura inconclusa no se reenvía.</p>
+<label class="check-field"><input type="checkbox" name="configuration_checked" value="1" required><span>Revisé la API, la facturación y las restricciones de la clave en Google Cloud.</span></label>
+<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para volver a enviar esta imagen a Google Cloud Vision.</span></label>
+<button class="button button-outline" type="submit">Reintentar lectura tras corregir Google</button>
 </form>{% endif %}
 </section>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
 <summary>Historial de procedencia y versiones recibidas</summary>
