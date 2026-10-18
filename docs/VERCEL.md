@@ -1,14 +1,26 @@
 # GitHub y Vercel
 
-Actualización: 17/10/2026. Código preparado para Flask sobre Vercel con PostgreSQL persistente. SQLite se conserva para trabajar localmente. No se debe confundir esta preparación con un despliegue verificado.
+Actualización: 18/10/2026. La [página preliminar](https://salta-emplea.vercel.app) está publicada en producción y accesible sin iniciar sesión. La aplicación Flask con PostgreSQL se conserva en el repositorio, pendiente de conectar y verificar en producción. SQLite se usa únicamente para trabajar localmente.
+
+## Publicación actual
+
+- Proyecto Vercel: `salta-emplea`, equipo `matias-projects-2dbf9656`.
+- Repositorio conectado: `Matifernandezar/salta-emplea`, rama de producción `main`.
+- Root Directory: `vista-previa`. Framework: Other; sitio HTML y CSS estático.
+- URL pública: https://salta-emplea.vercel.app.
+- Verificación pública: inicio, alertas, publicar, administración, privacidad, condiciones y CSS devuelven HTTP 200 sin credenciales. La navegación y el contenido preliminar se comprobaron por HTTP; no se obtuvo una comprobación visual en navegador.
+
+La vista preliminar no requiere base ni secretos. No incluye ofertas ficticias, formularios activos, suscripciones ni tareas. El panel publicado es una página informativa, no el administrador del backend. Los enlaces de funciones pendientes explican su estado. `scripts/build_preview.py` genera los archivos versionados desde las plantillas, usando una base temporal vacía y servicios deshabilitados. Para actualizar el sitio, regenerar, revisar y subir los archivos a main.
+
+La configuración de la raíz del repositorio corresponde al backend futuro; el despliegue estático utiliza `vista-previa/vercel.json`. No cambiar Root Directory hasta configurar y probar las dependencias siguientes.
 
 ## Estado de acceso
 
-El titular creó [Matifernandezar/salta-emplea](https://github.com/Matifernandezar/salta-emplea). El repositorio se creó público y se conservó esa visibilidad. El código y los cinco commits iniciales en español ya se subieron a main, sin secretos, bases ni imágenes. El bloqueo previo de createRepository quedó resuelto por esa creación manual. No se modificó otro repositorio.
+El titular creó [Matifernandezar/salta-emplea](https://github.com/Matifernandezar/salta-emplea). El repositorio se creó público y se conservó esa visibilidad. El código y los commits en español se subieron a main, sin secretos, bases ni imágenes privadas. La vinculación con Vercel y la publicación estática están verificadas. No se modificó otro repositorio.
 
-Vercel identifica el equipo `matias-projects-2dbf9656`. La consulta inicial de integraciones de almacenamiento recibió **403 forbidden**. No hay una credencial PostgreSQL de producción configurada ni un token de CLI Vercel; no se reutilizaron secretos de otras aplicaciones. La vinculación del proyecto y la conexión persistente se verifican por separado.
+La consulta inicial de integraciones de almacenamiento recibió **403 forbidden**. No hay una credencial PostgreSQL de producción configurada; no se reutilizaron secretos de otras aplicaciones. Esto no impide servir la publicación estática actual.
 
-## Configuración preparada
+## Configuración preparada para el backend
 
 - `.python-version` fija Python 3.12; `wsgi.py` exporta la aplicación Flask.
 - `vercel.json` prepara cron de vencimientos cada hora, recopilación cada seis horas y correo cada quince minutos. Consultar el plan necesario en VERCEL-COSTOS.md. Los cron solo quedan activos cuando existe despliegue de producción.
@@ -17,11 +29,11 @@ Vercel identifica el equipo `matias-projects-2dbf9656`. La consulta inicial de i
 - Las imágenes se redecodifican y guardan en PostgreSQL; la ruta de descarga sigue siendo privada. Las copias de PostgreSQL deben incluir esa tabla.
 - `CRON_SECRET` se compara con Authorization Bearer; no alcanza con conocer la URL de una tarea. Nunca contiene instrucciones para aprobar ofertas.
 
-## Pasos de publicación
+## Próxima etapa: activar la aplicación completa
 
-1. Crear un repositorio privado `salta-emplea` en la cuenta seleccionada, o proporcionar uno nuevo y vacío autorizado. Inicializarlo con README si se va a subir mediante la API de archivos. Con CLI Git se puede subir directamente el historial local.
-2. Subir la rama main con los commits en español. La configuración de CI ejecuta pruebas sin secretos de producción. Revisar archivos y confirmar que no se incluyan `.env`, bases, imágenes ni credenciales.
-3. Importar ese repositorio en el equipo Vercel seleccionado. Usar Flask, raíz del repositorio y la configuración versionada. No reemplazar un proyecto existente de otro producto.
+1. Conservar el repositorio y el proyecto ya vinculados. La configuración de CI ejecuta pruebas sin secretos de producción. Revisar que no se incluyan `.env`, bases, imágenes privadas ni credenciales.
+2. Mantener publicada la vista preliminar mientras se preparan las dependencias del backend. No indicar como activas las funciones pendientes.
+3. Preparar un despliegue de prueba de Flask con la raíz del repositorio y la configuración versionada, usando una base exclusiva de pruebas. Cambiar la raíz del proyecto público únicamente después de verificar el circuito completo y configurar producción.
 4. Conectar PostgreSQL, preferentemente mediante la integración Neon del proyecto. Usar una base exclusiva. No compartir producción con previews o pull requests. El plan gratuito tiene límites y no reemplaza una política de recuperación; ver costos antes de contratar.
 5. Configurar en Production los nombres de `.env.example` que correspondan: `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD_HASH`, `PUBLIC_BASE_URL`, `APP_ENV` y `CRON_SECRET`. Generar clave/hash con el CLI en un entorno privado; no pegarlos en el chat ni en Git. El origen público puede derivarse de `VERCEL_PROJECT_PRODUCTION_URL`, pero conviene fijarlo al dominio definitivo. El correo puede permanecer sin configurar.
 6. Desplegar, revisar build y registros, y comprobar `/salud`, CSS, buscador, panel, permisos y persistencia entre peticiones. Hacer la primera prueba editorial con un aviso privado claramente identificado, sin publicarlo en producción hasta completar la revisión. Retirar los datos de prueba antes del lanzamiento.

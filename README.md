@@ -2,9 +2,17 @@
 
 Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio gratuito, sin cuentas para candidatos, CV ni pagos. HTML liviano y Flask; PostgreSQL para Vercel y SQLite para desarrollo local. Los avisos entran pendientes y requieren aprobación del administrador; editar una publicación revoca su aprobación.
 
-## Despliegue en Vercel desde GitHub
+## Página pública preliminar
 
-La adaptación ya incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. El código está en [GitHub](https://github.com/Matifernandezar/salta-emplea) y las 144 pruebas, incluidas las de PostgreSQL real, pasan localmente. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza. Falta conectar la base de producción y verificar el despliegue.
+[Abrir Salta Emplea](https://salta-emplea.vercel.app). Vercel publica la carpeta `vista-previa/` desde este [repositorio de GitHub](https://github.com/Matifernandezar/salta-emplea). El inicio, cinco páginas informativas y los estilos responden HTTP 200 sin iniciar sesión, comprobado el 18/10/2026. La página está identificada como preliminar y comienza sin ofertas ficticias.
+
+La búsqueda, el envío de avisos, el panel y las alertas todavía no están habilitados en esta publicación estática. Sus pantallas indican que estarán disponibles en una próxima etapa. No recibe postulaciones ni suscripciones, y no ejecuta tareas automáticas.
+
+Para regenerar sus archivos desde las plantillas: `.venv/bin/python scripts/build_preview.py`. Revisar los cambios generados y subirlos a main para actualizar la página.
+
+## Aplicación completa preparada para Vercel
+
+El backend incluye PostgreSQL, imágenes privadas dentro de la base, migraciones explícitas, entrada WSGI, estáticos y cron autenticado. Las 144 pruebas, incluidas las de PostgreSQL real, pasan localmente. Falta conectar la base de producción y verificar allí el circuito editorial, las tareas y los servicios externos. Ver [guía de Vercel](docs/VERCEL.md) y [precios verificados](docs/VERCEL-COSTOS.md). No usar SQLite en Vercel: el arranque lo rechaza.
 
 ## Instalación local
 
@@ -33,7 +41,7 @@ El archivo [.env.example](.env.example) documenta solamente los nombres, sin sec
 
 ## Alternativa: producción en servidor propio
 
-Consultar [arquitectura](docs/ARQUITECTURA.md), [costos](docs/COSTOS.md), [fuentes](docs/FUENTES.md) y [operación](docs/OPERACION.md). No se ha contratado ni desplegado infraestructura pública.
+Consultar [arquitectura](docs/ARQUITECTURA.md), [costos](docs/COSTOS.md), [fuentes](docs/FUENTES.md) y [operación](docs/OPERACION.md). Esta alternativa no está desplegada. La publicación pública actual sirve únicamente la vista preliminar estática en Vercel; no se contrataron servicios de pago.
 
 1. Elegir servidor Linux con disco persistente y copias de seguridad. Validar dominio y nombre antes de usarlos como marca disponible.
 2. Configurar el entorno de producción, hash y clave fuerte; base pública HTTPS. La aplicación falla al iniciar si faltan estos datos. El correo puede permanecer deshabilitado.
