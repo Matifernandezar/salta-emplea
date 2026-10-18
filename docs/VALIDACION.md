@@ -1,5 +1,13 @@
 # Resultado por fase
 
+## Verificaciones reproducibles de fuente y navegador — 18/10/2026
+
+Se agregaron workflows separados para consultar Jobicy en una base temporal exclusiva y probar el circuito editorial en Chromium, tanto en celular como escritorio. El primero comprueba el historial antes de hacer una consulta: respeta una ventana conservadora de al menos una hora, omite corridas si hay otra sin terminar y rechaza la consulta cuando no puede comprobar la frecuencia. Importa dos veces el mismo payload cacheado, verifica datos y aprobación obligatoria, consulta estado una vez cuando corresponde y elimina la base de ensayo. El documento oficial se registra como evidencia para revisión humana, sin conceder permisos automáticamente. Ninguna fuente de producción se habilita.
+
+Chromium usa una aplicación aislada con avisos PRUEBA, sin secretos ni servicios de producción. Verifica aporte, aprobación, búsqueda y filtros, enlace de postulación sustituido localmente, dos corridas de vigencia y retirada por edición. Comprueba dimensiones en celular y escritorio; la visita a la publicación preliminar se informa por separado. Guarda solamente capturas de portadas públicas, durante tres días; no exporta sesiones ni trazas del panel. La ejecución real de estos workflows se debe comprobar después de subir esta fase.
+
+Se corrigió además un problema del original extenso: truncar directamente el JSON impedía recuperar el identificador del proveedor para comprobar vigencia. Ahora se guarda un fragmento como JSON válido, con su ID y una advertencia editorial. Las pruebas comprueban que un `closed` explícito sigue siendo procesable, que no se aprueba nada y que repetir no duplica.
+
 ## Controles de automatización y versiones — 18/10/2026
 
 Se agregó el panel privado `/admin/automatizacion` con configuración detectada, corridas y ejecución manual de lotes. Reutiliza la exclusión compartida con CLI/cron, limita intentos, fuente, correos y tiempo, y nunca aprueba avisos. Se registra la recepción de llamadas autenticadas al cron sin afirmar que la programación esté activa.

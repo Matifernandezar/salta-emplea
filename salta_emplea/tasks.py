@@ -97,6 +97,21 @@ def check_jobicy_status(conn, source, fetch=None, *, deadline=None):
     return result
 
 
+def _jobicy_original(row):
+    """Conservar JSON válido y el ID aun cuando el original supere el límite."""
+    original = json.dumps(row, ensure_ascii=False)
+    if len(original) <= 20_000:
+        return original, False
+    provider_id = row.get('id')
+    excerpt = {
+        'id': provider_id if type(provider_id) is int and provider_id > 0 else None,
+        'original_excerpt': original[:8_000],
+        'original_truncated': True,
+    }
+    # El escape JSON del fragmento puede duplicar su longitud: se reserva margen.
+    return json.dumps(excerpt, ensure_ascii=False), True
+
+
 def import_jobicy(conn, source, fetch=None, *, deadline=None):
     if not source['authorized'] or source['status'] != 'active' or source['url'] != JOBICY_API:
         raise ValueError('Fuente sin autorización o URL incompatible.')
@@ -113,17 +128,20 @@ def import_jobicy(conn, source, fetch=None, *, deadline=None):
         try:
             before = conn.execute('SELECT count(*) FROM jobs').fetchone()[0]
             description = plain(row.get('jobDescription'))
+            original_text, original_truncated = _jobicy_original(row)
             data = {
                 'title': plain(row.get('jobTitle')), 'company': plain(row.get('companyName')),
                 'location': None, 'modality': 'remota',
                 'sector': ', '.join(plain(x) for x in row.get('jobIndustry', []) if x) if isinstance(row.get('jobIndustry'), list) else plain(row.get('jobIndustry')),
                 'contract_type': ', '.join(plain(x) for x in row.get('jobType', []) if x) if isinstance(row.get('jobType'), list) else plain(row.get('jobType')),
-                'description': description, 'original_text': json.dumps(row, ensure_ascii=False)[:20_000],
+                'description': description, 'original_text': original_text,
                 'source_url': row.get('url'), 'source_name': 'Jobicy · ' + source['name'],
                 'application_url': row.get('url'), 'original_date': row.get('pubDate'),
                 'last_checked_at': domain.now(),
                 'uncertain_fields': [f"Confirmar residencia y zona horaria: {plain(row.get('jobGeo'))}", 'Revisar requisitos y condiciones en la fuente original'],
             }
+            if original_truncated:
+                data['uncertain_fields'].append('El original es extenso: se guardó un fragmento. Consultar el aviso completo en la fuente.')
             minimum, maximum = row.get('salaryMin'), row.get('salaryMax')
             numeric = lambda value: isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
             if row.get('salaryCurrency') and row.get('salaryPeriod') and (numeric(minimum) or numeric(maximum)):

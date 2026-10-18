@@ -120,3 +120,29 @@ def test_salary_only_when_all_source_fields_present(conn):
     row = conn.execute('SELECT salary_amount,salary_currency,salary_period,salary_source_evidence FROM jobs').fetchone()
     assert row['salary_amount'] == '1000–1500' and row['salary_currency'] == 'USD' and row['salary_period'] == 'monthly'
     assert json.loads(row['salary_source_evidence'])['salaryMin'] == 1000
+
+
+@pytest.mark.parametrize('remote_status,expected', [('active', 'pending'), ('closed', 'archived')])
+def test_long_original_keeps_provider_id_for_real_status_checks(conn, remote_status, expected):
+    data = payload()
+    original = data['jobs'][0]
+    original['jobDescription'] = '<p>' + ('Texto ficticio de prueba. ' * 1500) + '</p>'
+    assert tasks.import_jobicy(conn, source(), lambda _: data)['created'] == 1
+    job = conn.execute('SELECT * FROM jobs').fetchone()
+    stored = json.loads(job['original_text'])
+    assert stored['id'] == original['id']
+    assert stored['original_truncated'] is True
+    assert len(job['original_text']) <= 20_000
+    assert any('fragmento' in value for value in json.loads(job['uncertain_fields']))
+    calls = []
+
+    def status(url):
+        calls.append(url)
+        return {'jobs': [{'id': original['id'], 'status': remote_status}]}
+
+    assert tasks.check_jobicy_status(conn, source(), status)['checked'] == 1
+    assert calls == [tasks.JOBICY_API + '/status?ids=1']
+    assert conn.execute('SELECT status FROM jobs').fetchone()[0] == expected
+    assert domain.public_jobs(conn) == []
+    assert tasks.import_jobicy(conn, source(), lambda _: data)['created'] == 0
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 1

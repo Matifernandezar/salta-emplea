@@ -1,0 +1,48 @@
+name: Circuito real en Chromium
+
+on:
+  push:
+    paths:
+      - 'salta_emplea/**'
+      - 'scripts/browser_check.py'
+      - 'tests/**'
+      - 'requirements*.txt'
+      - 'vista-previa/**'
+      - '.github/workflows/navegador.yml'
+  pull_request:
+    paths:
+      - 'salta_emplea/**'
+      - 'scripts/browser_check.py'
+      - 'tests/**'
+      - 'requirements*.txt'
+      - 'vista-previa/**'
+      - '.github/workflows/navegador.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Preparar Python y dependencias de navegador
+        run: |
+          python3 --version
+          python3 -m venv .venv-navegador
+          .venv-navegador/bin/python -m pip install -r requirements-browser.txt
+          .venv-navegador/bin/python -m playwright install --with-deps chromium
+      - name: Probar circuito local en celular y escritorio
+        run: .venv-navegador/bin/python scripts/browser_check.py --check-public
+      - name: Conservar solo capturas públicas
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: capturas-publicas
+          path: /tmp/salta-qa-capturas/*.png
+          retention-days: 3
+          if-no-files-found: ignore

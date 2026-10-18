@@ -64,6 +64,8 @@ El Dockerfile y Compose están preparados pero su ejecución en un servidor de p
 
 Las pruebas incluyen edición/reaprobación, duplicados, vencimientos, enlaces, permisos, filtros, doble consentimiento y baja, colas y reejecuciones. Los adaptadores de correo se prueban con respuestas simuladas explícitas; esto no demuestra entrega real. Ver [validación por fase](docs/VALIDACION.md).
 
+GitHub Actions también prepara un [circuito real en Chromium](docs/QA-NAVEGADOR.md) para celular y escritorio, y una [comprobación aislada de Jobicy](docs/FUENTES.md). Son verificaciones separadas: consultar el resultado de cada corrida antes de afirmar que pasaron. La comprobación de fuente limita la frecuencia, no publica avisos y no habilita producción. El navegador conserva solo capturas públicas, sin sesiones ni datos del panel.
+
 ## Operación y recuperación
 
 ```bash

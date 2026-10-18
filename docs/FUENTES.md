@@ -14,6 +14,16 @@ La documentación limita cada sincronización automática a una por hora, ofrece
 
 El código incluye comprobación del estado documentado, probada con fixtures: solo `closed` archiva; `unknown` y errores solicitan revisión. No se comprobó este endpoint con un servicio real. El adaptador procesa una página de hasta 100 avisos por corrida, sin paginación ni garantía de cobertura.
 
+### Nuevo método de comprobación aislada — pendiente de corrida real
+
+El workflow separado [fuente-jobicy.yml](../.github/workflows/fuente-jobicy.yml) permite verificar acceso real desde GitHub Actions mediante ejecución manual o un cambio en ese workflow o en `scripts/verify_jobicy.py` sobre `main`. No tiene cron y su resultado no bloquea la suite de pruebas. Usa Python 3.12 y permisos de lectura de contenido e historial de Actions, sin credenciales de producción. El token efímero de GitHub se usa exclusivamente para comprobar la frecuencia y nunca se imprime.
+
+Antes de contactar Jobicy se verifica el historial: se exige una hora desde la última actualización de una corrida completada; si no figura, se reserva además todo su timeout de cinco minutos desde el inicio. Se omite la consulta si queda una corrida anterior sin terminar, y si no se puede comprobar el historial se rechaza la ejecución. Una corrida fallida u omitida también cuenta. Se serializan las corridas y se revisa el intento anterior en caso de reejecución. No ejecutar reiteradamente para intentar eludir esta ventana.
+
+El script descarga una vez el documento oficial con límite de tamaño, tiempo y sin seguir redirecciones. Registra únicamente URL, estado HTTP, bytes y SHA-256, con revisión humana del permiso pendiente: un documento recibido, su texto o su huella no autorizan automáticamente una fuente. Luego consulta una sola página de la API, importa **dos veces el mismo payload cacheado** en una SQLite temporal exclusiva, comprueba aprobación obligatoria, ausencia de duplicados y respaldo del sueldo, y consulta estado una sola vez si hay IDs candidatos. No aprueba ni publica ofertas; la base temporal y sus archivos se eliminan incluso ante errores. No se leen variables de base, correo ni la configuración de producción.
+
+La salida contiene un único JSON con contadores, garantías comprobadas, categorías geográficas de una lista cerrada, huella documental y clase de fallo; no conserva puestos, empresas, contactos ni contenidos originales. Cero avisos elegibles, cero importables o ausencia de IDs de estado se informan como alcance limitado y no prueban el circuito completo. La autorización humana y el encendido en producción son pasos independientes que siguen pendientes. Ejecutar el script sin `--allow-network` no hace ninguna consulta; el flag exige además el gate verificable de GitHub Actions.
+
 ## Otras fuentes evaluadas
 
 | Fuente | Evidencia y decisión inicial |

@@ -1,0 +1,29 @@
+name: Comprobación real aislada de Jobicy
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/verify_jobicy.py
+      - .github/workflows/fuente-jobicy.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: comprobacion-real-jobicy
+  cancel-in-progress: false
+jobs:
+  fuente-jobicy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Instalar dependencias de la aplicación
+        run: pip install -r requirements.txt
+      - name: Consultar una vez y comprobar importación aislada
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/verify_jobicy.py --allow-network
