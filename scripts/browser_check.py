@@ -111,7 +111,7 @@ def run_circuit(browser, viewport):
                 'original_text': 'PRUEBA: atención en comercio. Aviso ficticio de QA.',
             }
             for name, value in data.items():
-                page.locator(f'[name="{name}"]').fill(value)
+                page.locator(f'form [name="{name}"]').fill(value)
             page.locator('[name="modality"]').select_option('presencial')
             page.locator('[name="consent"]').check()
             page.get_by_role('button', name='Enviar para revisión').click()
