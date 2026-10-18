@@ -1,4 +1,4 @@
-"""QA Chromium con SQLite efímero y datos PRUEBA; no usa servicios productivos."""
+"""QA Chromium aislado con datos PRUEBA; la comprobación pública es solo lectura."""
 import argparse
 from contextlib import contextmanager
 import logging
@@ -8,7 +8,7 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
 from unittest.mock import patch
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -235,29 +235,109 @@ def check_access_helper(browser, target=None):
         context.close()
 
 
-def check_public(browser):
-    """Solo lectura, sin cookies/credenciales; una falla externa no invalida QA local."""
+def check_public_backend(context, page, origin):
+    """Verifica el backend sin autenticarse, enviar formularios ni crear registros."""
+    response = context.request.get(origin + '/salud', timeout=20000)
+    assert response.status == 200, f'Salud del backend: HTTP {response.status}'
+    assert response.json() == {'status': 'ok'}, 'La comprobación SQL no confirmó salud.'
+    expect(page.get_by_role('heading', level=1)).to_contain_text('Tu próximo trabajo')
+
+    filters = {'q': 'salta', 'modality': 'remota', 'days': '7'}
+    page.locator('[name="q"]').fill(filters['q'])
+    for name in ('location', 'sector', 'schedule'):
+        values = page.locator(f'select[name="{name}"] option').evaluate_all(
+            '(options) => options.map(option => option.value).filter(Boolean)')
+        # La base puede estar vacía: no inventamos localidades ni rubros publicados.
+        filters[name] = values[0] if values else ''
+    for name, value in filters.items():
+        if name != 'q':
+            page.locator(f'[name="{name}"]').select_option(value)
+    with page.expect_navigation() as navigation:
+        page.get_by_role('button', name='Buscar ofertas').click()
+    assert navigation.value.status == 200
+    query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
+    assert all(query.get(name) == [value] for name, value in filters.items())
+    for name, value in filters.items():
+        expect(page.locator(f'[name="{name}"]')).to_have_value(value)
+    expect(page.get_by_role('heading', name='Resultados de tu búsqueda')).to_be_visible()
+    no_horizontal_overflow(page)
+
+    for path, heading in (
+        ('/publicar', 'Compartí una oferta laboral'),
+        ('/alertas', 'Recibí ofertas que te interesan.'),
+        ('/privacidad', 'Privacidad'),
+        ('/condiciones', 'Condiciones del servicio'),
+    ):
+        response = page.goto(origin + path, timeout=20000)
+        assert response.status == 200, f'{path}: HTTP {response.status}'
+        expect(page.get_by_role('heading', level=1, name=heading, exact=True)).to_be_visible()
+        no_horizontal_overflow(page)
+
+    for path in ('/admin', '/admin/automatizacion', '/admin/fuentes',
+                 '/admin/publicidad', '/admin/configuracion', '/admin/ofertas/1'):
+        response = context.request.get(origin + path, max_redirects=0, timeout=20000)
+        assert response.status in (302, 303), f'{path}: acceso privado sin redirección.'
+        target = urljoin(origin + path, response.headers.get('location', ''))
+        assert target == origin + '/admin/ingresar', f'{path}: destino de ingreso inesperado.'
+        assert 'no-store' in response.headers.get('cache-control', '')
+    response = page.goto(origin + '/admin', timeout=20000)
+    assert response.status == 200
+    expect(page).to_have_url(origin + '/admin/ingresar')
+    expect(page.get_by_role('heading', name='Ingresá al panel')).to_be_visible()
+    no_horizontal_overflow(page)
+
+    for task in ('collect', 'expire', 'mail'):
+        response = context.request.get(origin + '/api/cron/' + task, timeout=20000)
+        assert response.status == 401, f'Cron {task}: no rechazó el acceso sin credencial.'
+        assert 'no-store' in response.headers.get('cache-control', '')
+
+
+def check_public(browser, origin='https://salta-emplea.vercel.app'):
+    """Solo GET/HEAD al sitio, sin credenciales; una falla solicitada hace fallar QA."""
+    modes = set()
     for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
         context = browser.new_context(viewport=viewport, is_mobile=viewport['width'] < 600,
-                                      has_touch=viewport['width'] < 600)
+                                      has_touch=viewport['width'] < 600, service_workers='block')
+        mutations = []
+
+        def read_only_request(route):
+            request = route.request
+            if request.method not in ('GET', 'HEAD'):
+                mutations.append(request.method)
+                route.abort()
+            elif (urlsplit(request.url).scheme, urlsplit(request.url).netloc) == (
+                    urlsplit(origin).scheme, urlsplit(origin).netloc):
+                route.continue_()
+            else:
+                # No se siguen contactos ni se cargan servicios de terceros.
+                route.abort()
+
+        context.route('**/*', read_only_request)
         try:
             page = context.new_page()
-            response = page.goto('https://salta-emplea.vercel.app', timeout=20000)
-            assert response.status == 200
-            expect(page.get_by_text('Versión preliminar.', exact=True)).to_be_visible()
+            response = page.goto(origin, timeout=20000)
+            assert response.status == 200, f'Web pública: HTTP {response.status}'
             assert 'Salta' in page.title()
             page.screenshot(path=str(CAPTURES / f'vercel-publica-{viewport["width"]}.png'), full_page=True)
             no_horizontal_overflow(page)
-            print(f'WEB PÚBLICA {viewport["width"]}: HTTP 200, contenido preliminar y captura; no comprueba backend.')
-        except Exception as error:
-            print(f'WEB PÚBLICA {viewport["width"]} PENDIENTE: acceso/contenido no confirmado ({type(error).__name__}).')
+            if page.get_by_text('Versión preliminar.', exact=True).count():
+                modes.add('preliminar')
+                print(f'WEB PÚBLICA {viewport["width"]}: HTTP 200 y vista preliminar; no comprueba backend.')
+            else:
+                check_public_backend(context, page, origin)
+                modes.add('backend')
+                print(f'WEB PÚBLICA {viewport["width"]}: salud SQL, buscador y filtros GET, páginas públicas, '
+                      'administración protegida y cron denegado; sin escrituras ni correos.')
+            assert not mutations, f'La lectura pública intentó métodos de escritura: {mutations}'
         finally:
             context.close()
+    assert len(modes) == 1, 'El despliegue cambió durante QA; repetir la comprobación.'
+    return modes.pop()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--check-public', action='store_true', help='Agregar lectura pública opcional, sin secretos.')
+    parser.add_argument('--check-public', action='store_true', help='Comprobar también la web pública, solo lectura y sin secretos.')
     args = parser.parse_args()
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     CAPTURES.mkdir(parents=True, exist_ok=True)
@@ -268,8 +348,9 @@ def main():
                 run_circuit(browser, viewport)
             check_access_helper(browser)
             if args.check_public:
-                check_public(browser)
-                check_access_helper(browser, 'https://salta-emplea.vercel.app/configurar-acceso')
+                mode = check_public(browser)
+                if mode == 'preliminar':
+                    check_access_helper(browser, 'https://salta-emplea.vercel.app/configurar-acceso')
         finally:
             browser.close()
 
