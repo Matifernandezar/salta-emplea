@@ -7,7 +7,8 @@ https://developers.google.com/search/docs/appearance/structured-data/job-posting
 """
 
 import re
-from urllib.parse import quote, urlsplit
+import unicodedata
+from urllib.parse import quote, unquote, urlsplit
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 
@@ -51,9 +52,11 @@ def public_contact_url(config):
     No se deriva un perfil del nombre, no se consulta LinkedIn y no se conserva
     ningún parámetro que pudiera contener tokens o seguimiento. Los dominios
     Unicode o codificados no se convierten a un dominio admitido por semejanza.
+    El identificador conserva sus caracteres: solo se normaliza su codificación
+    UTF-8, sin transliterar ni cambiar la composición Unicode del nombre.
     """
     value = config.get('PUBLIC_CONTACT_URL') or ''
-    if (not isinstance(value, str) or len(value) > 500 or not value.isascii() or
+    if (not isinstance(value, str) or len(value) > 500 or
             any(c.isspace() or ord(c) < 32 for c in value) or
             any(c in value for c in ('\\', '?', '#'))):
         return None
@@ -62,11 +65,26 @@ def public_contact_url(config):
         if (parsed.scheme != 'https' or parsed.username is not None or
                 parsed.password is not None or parsed.query or parsed.fragment or
                 parsed.port not in (None, 443) or
-                not re.fullmatch(r'(?:www\.)?linkedin\.com(?::443)?', parsed.netloc, re.I) or
-                not re.fullmatch(r'/in/[A-Za-z0-9][A-Za-z0-9-]{0,199}/?', parsed.path)):
+                not re.fullmatch(r'(?:www\.)?linkedin\.com(?::443)?', parsed.netloc,
+                                 re.I | re.ASCII)):
             return None
-        return 'https://' + parsed.hostname.lower() + parsed.path.rstrip('/')
-    except ValueError:
+        path = re.fullmatch(r'/in/([^/]+)/?', parsed.path)
+        if not path or re.search(r'%(?![0-9A-Fa-f]{2})', path[1]):
+            return None
+        # Una sola decodificación estricta impide aceptar UTF-8 inválido,
+        # dobles escapes o separadores que cambien la ruta al interpretarse.
+        slug = unquote(path[1], encoding='utf-8', errors='strict')
+        if not 1 <= len(slug) <= 200:
+            return None
+        categories = [unicodedata.category(character) for character in slug]
+        if (categories[0][0] != 'L' and categories[0] != 'Nd') or any(
+                character != '-' and category[0] != 'L' and
+                category not in ('Nd', 'Mn', 'Mc')
+                for character, category in zip(slug, categories)):
+            return None
+        normalized = 'https://' + parsed.hostname.lower() + '/in/' + quote(slug, safe='-')
+        return normalized if len(normalized) <= 500 else None
+    except (ValueError, UnicodeError):
         return None
 
 

@@ -4,7 +4,7 @@ Web de avisos laborales para Salta y oportunidades remotas compatibles. Servicio
 
 ## Sitio publicado
 
-[Abrir Salta Emplea](https://salta-emplea.vercel.app) · [Ingresar al panel](https://salta-emplea.vercel.app/admin/ingresar) · [Guía de administración](docs/OPERACION.md).
+[Abrir Salta Emplea](https://saltaemplea.com) · [Ingresar al panel](https://saltaemplea.com/admin/ingresar) · [Guía de administración](docs/OPERACION.md).
 
 Desde el 18/10/2026 Vercel ejecuta la aplicación Flask desde la raíz de este [repositorio](https://github.com/Matifernandezar/salta-emplea), con PostgreSQL de Neon. El build aplicó migraciones sin datos de prueba y `/salud` confirmó una conexión SQL real. Están habilitados el buscador, los filtros, los aportes pendientes y el acceso privado al panel. La base comienza sin ofertas publicadas; ninguna tarea aprueba avisos.
 
@@ -12,13 +12,13 @@ El titular configuró sus claves directamente como Secret en Production. No se l
 
 ## Automatización y verificación
 
-El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes manuales de recopilación, vigencia y correo. La revisión editorial compara versiones recibidas con los datos preparados. Las fuentes comienzan vacías y requieren revisión de condiciones y autorización explícita desde el panel. El adaptador Jobicy pasó una [comprobación real aislada](https://github.com/Matifernandezar/salta-emplea/actions/runs/39094646224), sin habilitar producción.
+El panel `/admin/automatizacion` permite comprobar configuración, revisar corridas y ejecutar lotes manuales de recopilación, vigencia y correo. La revisión editorial compara versiones recibidas con los datos preparados. Cada fuente requiere revisión de condiciones y autorización explícita. Jobicy fue autorizado por el titular y completó una primera consulta real en producción: 100 avisos recibidos y cinco incorporados pendientes el 19/10/2026. Los detalles y límites están en VALIDACION.md.
 
-La configuración principal prepara recopilación, vigencia y correo una vez por día, sin cambiar planes. Su ejecución real debe comprobarse después del despliegue. La alternativa frecuente permanece en `deploy/vercel-programado.json`. El titular autorizó Jobicy el 19/10; su registro inicial es idempotente y no vuelve a activar fuentes pausadas. El correo sigue deshabilitado hasta configurar y probar proveedor/remitente. WhatsApp y redes preparan enlaces manuales para ofertas aprobadas; no hay publicación automática conectada.
+La configuración principal prepara recopilación, vigencia y correo una vez por día, sin cambiar planes. Se observó la primera recopilación persistida de Jobicy; la configuración diaria y los resultados se documentan por separado en VALIDACION.md. La alternativa frecuente permanece en `deploy/vercel-programado.json`. El titular autorizó Jobicy el 19/10; su registro inicial es idempotente y no vuelve a activar fuentes pausadas. El correo sigue deshabilitado hasta configurar y probar proveedor/remitente. WhatsApp y redes preparan enlaces manuales para ofertas aprobadas; no hay publicación automática conectada.
 
 Los resultados actuales de PostgreSQL y Chromium se registran en la [validación por fase](docs/VALIDACION.md), con enlaces a las corridas y sus límites. El navegador comprueba el circuito editorial e imágenes con proveedor OCR sustituido en bases temporales y consulta producción solo en lectura, en celular y escritorio. No demuestra una lectura real con Google. Ver [QA de navegador](docs/QA-NAVEGADOR.md), [Vercel](docs/VERCEL.md) y [presupuesto vigente](docs/COSTOS.md).
 
-Preparación operativa del 19/10: cuotas y reservas de correo, webhook firmado de rebotes/supresiones, diagnóstico privado de corridas y cola, identidad legal configurable, metadatos y sitemap. El correo real sigue pendiente de dominio, proveedor y prueba autorizada. La [recuperación PostgreSQL](docs/RESPALDOS.md) y la [retención manual](docs/RETENCION.md) tienen comandos específicos; no instalan backups externos ni borrados de producción.
+Preparación operativa del 19/10: cuotas y reservas de correo, webhook firmado de rebotes/supresiones, diagnóstico privado de corridas y cola, identidad legal configurable, metadatos y sitemap. El dominio web saltaemplea.com tiene DNS y HTTPS verificados. El responsable es Matías Fernández, con su perfil de LinkedIn como contacto y sin teléfono ni correo personal públicos. El correo de alertas sigue pendiente de cuenta, verificación DNS del remitente y prueba autorizada; la conexión web del dominio no verifica el envío de correo. La [recuperación PostgreSQL](docs/RESPALDOS.md) y la [retención manual](docs/RETENCION.md) tienen comandos específicos; no instalan backups externos ni borrados de producción.
 
 El diagnóstico `python -m salta_emplea.cli check-production --with-crons` muestra nombres y estados, sin valores secretos. `--check-database` agrega consultas de solo lectura de conexión y esquema; no migra ni envía correo. No usar SQLite en Vercel: el arranque lo rechaza.
 

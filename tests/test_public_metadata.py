@@ -177,6 +177,14 @@ def test_invalid_contact_never_becomes_an_injected_mailto():
     ('https://www.linkedin.com/in/perfil-ficticio-prueba', 'https://www.linkedin.com/in/perfil-ficticio-prueba'),
     ('https://linkedin.com/in/perfil-ficticio-prueba/', 'https://linkedin.com/in/perfil-ficticio-prueba'),
     ('https://WWW.LINKEDIN.COM:443/in/Perfil-Prueba-123/', 'https://www.linkedin.com/in/Perfil-Prueba-123'),
+    ('https://www.linkedin.com/in/perfil-matías-prueba',
+     'https://www.linkedin.com/in/perfil-mat%C3%ADas-prueba'),
+    ('https://www.linkedin.com/in/perfil-mat%c3%adas-prueba/',
+     'https://www.linkedin.com/in/perfil-mat%C3%ADas-prueba'),
+    ('https://www.linkedin.com/in/%50erfil-%C3%91-prueba',
+     'https://www.linkedin.com/in/Perfil-%C3%91-prueba'),
+    ('https://www.linkedin.com/in/perfil-mati\u0301as-prueba',
+     'https://www.linkedin.com/in/perfil-mati%CC%81as-prueba'),
 ])
 def test_public_contact_accepts_only_explicit_profile_and_normalizes_safe_url(value, normalized):
     identity = public_metadata.legal_identity({
@@ -184,8 +192,21 @@ def test_public_contact_accepts_only_explicit_profile_and_normalizes_safe_url(va
         'PUBLIC_CONTACT_URL': value,
     })
     assert identity['url'] == normalized
+    assert public_metadata.public_contact_url({'PUBLIC_CONTACT_URL': normalized}) == normalized
     assert identity['complete'] is True
     assert identity['email'] == '' and identity['mailto'] is None
+
+
+def test_public_contact_canonical_unicode_url_respects_limit_and_is_idempotent():
+    prefix = 'https://www.linkedin.com/in/'
+    # Cada letra ocupa seis caracteres al codificarse como UTF-8 en la URL.
+    longest_slug = 'á' * ((500 - len(prefix)) // 6)
+    canonical = public_metadata.public_contact_url({'PUBLIC_CONTACT_URL': prefix + longest_slug})
+    assert canonical is not None and len(canonical) <= 500
+    assert public_metadata.public_contact_url({'PUBLIC_CONTACT_URL': canonical}) == canonical
+    assert public_metadata.public_contact_url({
+        'PUBLIC_CONTACT_URL': prefix + longest_slug + 'á',
+    }) is None
 
 
 @pytest.mark.parametrize('value', [
@@ -195,6 +216,9 @@ def test_public_contact_accepts_only_explicit_profile_and_normalizes_safe_url(va
     'https://evil-linkedin.com/in/prueba', 'https://wwwlinkedin.com/in/prueba',
     'https://es.linkedin.com/in/prueba', 'https://www.linkedin.com./in/prueba',
     'https://www.linkedіn.com/in/prueba',  # i cirílica, no el dominio real
+    'https://www.linkedİn.com/in/prueba',  # el casefold Unicode no habilita dominios
+    'https://www.lınkedin.com/in/prueba',
+    'https://www.linKedin.com/in/prueba',
     'https://www.linkedin。com/in/prueba', 'https://ｗｗｗ.linkedin.com/in/prueba',
     'https://xn--linkedin-9jg.com/in/prueba',
     'https://user:secret@www.linkedin.com/in/prueba',
@@ -207,6 +231,27 @@ def test_public_contact_accepts_only_explicit_profile_and_normalizes_safe_url(va
     'https://www.linkedin.com/in/prueba?', 'https://www.linkedin.com/in/prueba#',
     'https://www.linkedin.com/in/prueba%3Ftoken%3Dsecreto-no-publicar',
     'https://www.linkedin.com/in/prueba%2Fotra-ruta',
+    'https://www.linkedin.com/in/prueba%2f',
+    'https://www.linkedin.com/in/prueba%5cotra-ruta',
+    'https://www.linkedin.com/in/prueba%252Fotra-ruta',
+    'https://www.linkedin.com/in/prueba%25C3%25AD',
+    'https://www.linkedin.com/in/prueba%3Ddato',
+    'https://www.linkedin.com/in/prueba%40host',
+    'https://www.linkedin.com/in/prueba%0A',
+    'https://www.linkedin.com/in/prueba%00',
+    'https://www.linkedin.com/in/prueba%20nombre',
+    'https://www.linkedin.com/in/prueba%C0%AFotra-ruta',  # UTF-8 excesivamente largo
+    'https://www.linkedin.com/in/prueba%ED%A0%80',  # sustituto Unicode inválido
+    'https://www.linkedin.com/in/prueba%FF',
+    'https://www.linkedin.com/in/prueba%3', 'https://www.linkedin.com/in/prueba%GG',
+    'https://www.linkedin.com/in/prueba%',
+    'https://www.linkedin.com/in/prueba\ud800',
+    'https://www.linkedin.com/in/prueba\u202Eotro',  # control de dirección
+    'https://www.linkedin.com/in/prueba%E2%80%AEotro',
+    'https://www.linkedin.com/in/prueba\u200Dotro',  # unión invisible
+    'https://www.linkedin.com/in/\u0301prueba',
+    'https://www.linkedin.com/in/' + 'á' * 201,
+    'https://www.linkedin.com/%69n/prueba',
     'https://www.linkedin.com/in/prueba/otra-ruta',
     'https://www.linkedin.com/in/../prueba', 'https://www.linkedin.com/company/prueba',
     'https://www.linkedin.com/in/', 'https://www.linkedin.com/in/prueba\\@evil.example',
@@ -224,7 +269,7 @@ def test_public_contact_rejects_external_confusable_or_secret_bearing_urls(value
 
 def test_profile_contact_completes_legal_pages_without_personal_email_or_phone(app):
     app.config.update(PUBLIC_RESPONSIBLE_NAME='Matías Fernández',
-                      PUBLIC_CONTACT_URL='https://www.linkedin.com/in/perfil-ficticio-prueba',
+                      PUBLIC_CONTACT_URL='https://www.linkedin.com/in/perfil-matías-prueba',
                       MAIL_FROM='Alertas <alertas@example.org>')
     client = app.test_client()
     for path in ('/privacidad', '/condiciones'):
@@ -233,7 +278,7 @@ def test_profile_contact_completes_legal_pages_without_personal_email_or_phone(a
         assert 'Información preliminar' not in html
         assert 'Matías Fernández' in html
         assert 'Perfil de LinkedIn del responsable' in html
-        assert 'href="https://www.linkedin.com/in/perfil-ficticio-prueba"' in html
+        assert 'href="https://www.linkedin.com/in/perfil-mat%C3%ADas-prueba"' in html
         assert 'LinkedIn es un servicio externo' in html
         assert 'tel:' not in html and 'mailto:' not in html
         assert 'alertas@example.org' not in html

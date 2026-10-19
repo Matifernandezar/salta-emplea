@@ -1,14 +1,24 @@
 # Alertas por correo
 
-Estado de esta fase, 19/10/2026: el circuito de consentimiento, la bandeja persistente, los límites y la recepción firmada de supresiones están implementados y probados con datos locales y proveedor sustituido. **No se enviaron correos reales en esta fase.** Faltan dominio/remitente verificados, configuración privada y autorización de un destinatario para comprobar recepción. La configuración por sí sola no demuestra entrega.
+Estado de esta fase, 19/10/2026: el circuito de consentimiento, la bandeja persistente, los límites y la recepción firmada de supresiones están implementados y probados con datos locales y proveedor sustituido. **No se enviaron correos reales en esta fase.** El dominio web saltaemplea.com ya tiene DNS y HTTPS verificados. Faltan la cuenta Resend, verificación específica del dominio para enviar correo, remitente, configuración privada y autorización de un destinatario para comprobar recepción. La configuración por sí sola no demuestra entrega.
 
 El formulario de producción permanece cerrado mientras falten datos públicos válidos del responsable y contacto, o la configuración del remitente no sea apta. No registra direcciones en ese estado. La baja revoca el enlace de confirmación anterior; una nueva solicitud genera otro token. Una confirmación incierta se concilia antes de preparar otra.
+
+## Primer paso del titular: crear la cuenta
+
+1. Abrir https://resend.com/signup, crear la cuenta y confirmar el correo de acceso. Ese correo es privado de la cuenta; no se convierte en contacto público del sitio.
+2. Elegir el plan **Free**. Los límites oficiales consultados el 19/10/2026 son 100 correos diarios y 3.000 mensuales; no activar un plan pago, excedentes ni una contratación por este procedimiento.
+3. En **Domains → Add Domain**, introducir `saltaemplea.com`. Usar una región ofrecida y conservarla; la aplicación no fija una región de envío ni inventa registros.
+4. Conservar los nombres, tipos y valores DNS generados. Son datos de verificación del dominio, diferentes de una clave API; pueden usarse para preparar los registros en Vercel DNS. No modificar los registros de la web ni el MX de una casilla existente.
+5. Tras la verificación, se prepara el remitente de alertas, la clave limitada al envío y el webhook. Los secretos se guardan directamente en **Vercel → salta-emplea → Settings → Environment Variables → Production**, como Secret. Los nombres figuran abajo; no enviar los valores por chat.
+
+Agregar el dominio en Resend y publicar sus registros no crea una casilla de correo ni acredita recepción de las alertas. La prueba con un destinatario autorizado es un paso posterior.
 
 ## Preparación de la cuenta y DNS
 
 La implementación existente usa la API oficial de Resend. No se instaló ni contrató un nuevo servicio. Antes de activar la cuenta o cambiar planes, revisar [costos](COSTOS.md) y confirmar el importe concreto con el titular.
 
-1. El titular identifica un dominio propio y un correo real de contacto. El subdominio de envío puede diferir del dominio donde se aloja la web; no hace falta reemplazar la URL de Vercel para enviar desde un dominio propio verificado.
+1. El titular usa saltaemplea.com como dominio propio y su perfil exacto de LinkedIn como contacto público, sin teléfono ni correo personal públicos. El remitente de alertas es independiente de ese contacto. El subdominio de envío puede diferir del dominio donde se aloja la web; no hace falta reemplazar la URL de Vercel para enviar desde un dominio propio verificado.
 2. En Resend, agregar un dominio o subdominio que el titular controle. Se recomienda separar el correo de alertas del correo habitual de la organización.
 3. Copiar **los registros exactos generados por Resend** al proveedor DNS: DKIM, SPF y Return-Path. No inventar valores ni sustituir el MX del correo habitual. Evitar dos registros SPF para el mismo nombre y revisar los registros existentes antes de modificarlos.
 4. Esperar la verificación de los registros en Resend. Revisar que el dominio exacto del remitente esté autorizado; un dominio raíz verificado no implica que cualquier subdominio también lo esté.

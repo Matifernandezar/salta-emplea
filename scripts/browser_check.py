@@ -464,7 +464,7 @@ def check_public_backend(context, page, origin):
         assert 'no-store' in response.headers.get('cache-control', '')
 
 
-def check_public(browser, origin='https://salta-emplea.vercel.app'):
+def check_public(browser, origin='https://saltaemplea.com'):
     """Solo GET/HEAD al sitio, sin credenciales; una falla solicitada hace fallar QA."""
     modes = set()
     for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
@@ -523,7 +523,7 @@ def main():
             if args.check_public:
                 mode = check_public(browser)
                 if mode == 'preliminar':
-                    check_access_helper(browser, 'https://salta-emplea.vercel.app/configurar-acceso')
+                    check_access_helper(browser, 'https://saltaemplea.com/configurar-acceso')
         finally:
             browser.close()
 

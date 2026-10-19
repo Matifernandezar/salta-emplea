@@ -19,14 +19,14 @@ Sin perfiles de candidatos, cuentas públicas, almacenamiento de CV, cobros ni p
 ## 2. Contexto existente que debés revisar
 
 - Repositorio: https://github.com/Matifernandezar/salta-emplea
-- Producción: https://salta-emplea.vercel.app
-- Panel: https://salta-emplea.vercel.app/admin
+- Producción: https://saltaemplea.com
+- Panel: https://saltaemplea.com/admin
 - Stack: Flask, HTML renderizado en servidor, PostgreSQL en Neon, Vercel y GitHub Actions.
 - El backend y la conexión SQL ya se verificaron en producción. Buscador, filtros, aportes, panel, aprobación y tareas manuales están implementados.
-- La última validación documentada registra 485 pruebas con PostgreSQL y un circuito en Chromium móvil/escritorio. Revisá los resultados actuales: ese registro histórico no prueba el estado de hoy.
-- Jobicy pasó una prueba real aislada; eso no equivale a estar habilitado en producción.
+- La última validación previa al dominio registra 733 pruebas con PostgreSQL y un circuito en Chromium móvil/escritorio. Revisá los resultados actuales: ese registro histórico no prueba el estado de hoy.
+- Jobicy está autorizado, activo y completó una primera recopilación real en producción el 19/10/2026: 100 recibidos y cinco incorporados pendientes. Eso no demuestra elegibilidad definitiva de cada oferta.
 - Instagram @empleosalta12 pertenece a un tercero. Instagram, Computrabajo y LinkedIn no tienen acceso automático autorizado verificado.
-- No hay programación instalada ni entrega real de alertas verificada. La difusión disponible es manual.
+- Hay programación diaria en Vercel y resultado persistido de la primera recopilación; la entrega real de alertas sigue sin verificar. La difusión disponible es manual.
 - Las imágenes originales permanecen privadas. El OCR real de Google no tuvo una lectura exitosa documentada.
 - Hay documentación desactualizada que debe corregirse. El comando de backup SQLite no respalda PostgreSQL.
 
@@ -36,9 +36,9 @@ Leé las instrucciones locales y contrastá código, documentación, CI y despli
 
 Completá estos datos con las respuestas de esta conversación y no vuelvas a pedir información ya respondida:
 
-- Dominio: el titular eligió saltaemplea.com y anunció que lo comprará; propiedad, DNS y proveedor de correo todavía sin verificar.
+- Dominio: el titular confirmó la compra de saltaemplea.com. Vercel lo asocia al proyecto correcto con verified=true, DNS sin errores y HTTPS /salud 200 comprobados el 19/10/2026. El proveedor de correo sigue pendiente; el titular todavía no creó cuenta en Resend.
 - Nombre público del responsable: Matías Fernández, indicado expresamente por el titular el 19/10/2026.
-- Contacto público: sin teléfono ni correo personal; el titular eligió su LinkedIn. URL exacta PENDIENTE, no inferirla de su nombre. El remitente de alertas del dominio es una configuración independiente.
+- Contacto público: sin teléfono ni correo personal; el titular eligió su LinkedIn. Perfil exacto provisto: https://www.linkedin.com/in/mat%C3%ADas-fernandez-555141250, conservando la tilde y sin seguimiento. El remitente de alertas del dominio es una configuración independiente.
 - Autorización para probar confirmación, resumen y baja con ese correo: PENDIENTE. Sin autorización, no envíes mensajes reales.
 - Jobicy fue aceptado como primera fuente mediante autorización del titular el 19/10/2026; mantener atribución, enlace y aprobación editorial. No volver a pedir esa elección.
 - Imágenes solo privadas o también flyers públicos con permiso de reutilización: PENDIENTE. Conservá los originales privados mientras no se defina.
