@@ -36,7 +36,7 @@ Leé las instrucciones locales y contrastá código, documentación, CI y despli
 
 Completá estos datos con las respuestas de esta conversación y no vuelvas a pedir información ya respondida:
 
-- Dominio: el titular confirmó la compra de saltaemplea.com. Vercel lo asocia al proyecto correcto con verified=true, DNS sin errores y HTTPS /salud 200 comprobados el 19/10/2026. El proveedor de correo sigue pendiente; el titular todavía no creó cuenta en Resend.
+- Dominio: el titular confirmó la compra de saltaemplea.com. Vercel lo asocia al proyecto correcto con verified=true, DNS sin errores y HTTPS /salud 200 comprobados el 19/10/2026. Una prueba externa posterior de DNS público/HTTPS pasó, pero el titular informó ERR_NAME_NOT_RESOLVED en su celular: falta confirmar acceso desde su red, sin asumir propagación completa. El correo está en pausa; no solicitar cuenta Resend hasta que indique retomar.
 - Nombre público del responsable: Matías Fernández, indicado expresamente por el titular el 19/10/2026.
 - Contacto público: sin teléfono ni correo personal; el titular eligió su LinkedIn. Perfil exacto provisto: https://www.linkedin.com/in/mat%C3%ADas-fernandez-555141250, conservando la tilde y sin seguimiento. El remitente de alertas del dominio es una configuración independiente.
 - Autorización para probar confirmación, resumen y baja con ese correo: PENDIENTE. Sin autorización, no envíes mensajes reales.

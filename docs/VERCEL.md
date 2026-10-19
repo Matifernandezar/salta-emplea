@@ -14,6 +14,8 @@ Actualización: 19/10/2026. [Salta Emplea](https://saltaemplea.com) ejecuta Flas
 
 El despliegue inicial del backend `dpl_BoajdyPMNqsY8WbxhcNuMypSrB3w`, commit `35ef8f2`, terminó READY. El registro de build confirmó migraciones PostgreSQL aplicadas sin datos de prueba. Una petición real a `/salud` devolvió HTTP 200 y `{"status":"ok"}`, que implica una consulta SQL correcta. Portada, aportes, alertas e ingreso respondieron HTTP 200; cron sin credencial respondió 401. Los resultados posteriores de navegador se registran en VALIDACION.md.
 
+El 19/10 el titular informó un fallo DNS desde su celular pese a las respuestas correctas en Cloudflare, Google y HTTPS externo. La delegación y los registros existentes se conservaron. Las comprobaciones externas no garantizan resolución inmediata en todas las redes; el acceso móvil del titular permanece pendiente de confirmación. Ver el diagnóstico y sus límites en VALIDACION.md.
+
 ## Variables y acceso
 
 La conexión Neon y los nombres `SECRET_KEY`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`, `PUBLIC_BASE_URL` y `APP_ENV` figuran en Production. Las claves privadas y la conexión son Secret; se verificaron únicamente sus metadatos, sin leer valores. El titular eligió la contraseña y guardó el hash con el [generador privado](CONFIGURAR-ACCESO.md).

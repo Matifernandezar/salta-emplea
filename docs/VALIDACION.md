@@ -1,5 +1,11 @@
 # Resultado por fase
 
+## Diagnóstico de DNS desde celular — 19/10/2026
+
+El titular informó `ERR_NAME_NOT_RESOLVED` para www y confirmó que el enlace sin www también falla en su conexión móvil. La comprobación previa mediante herramientas de Vercel no bastaba para acreditar acceso desde esa red. Se revisaron la delegación, la zona y el enlace al proyecto: ns1/ns2.vercel-dns.com coinciden con los previstos, no hay conflictos y los ALIAS del sistema cubren raíz y subdominios.
+
+Se consultaron DNS sobre HTTPS de Cloudflare y Google por separado: NS de raíz, A de raíz y A de www, los seis con Status=0 y respuestas válidas; los registros A observados tenían TTL 1800. Una comprobación HTTPS externa sin bypass de Vercel obtuvo raíz HTTP 200 y www HTTP 308 a la raíz. No se modificaron DNS que ya respondían correctamente. Estas comprobaciones no prueban la resolución del operador móvil del titular: caché negativa/propagación es una hipótesis, sin plazo garantizado. Se indicó probar Safari, reconectar y comparar con Wi-Fi. **El acceso desde el celular del titular sigue sin confirmar.** El correo permanece en pausa.
+
 ## Prioridad del dominio y pausa de correo — 19/10/2026
 
 El titular indicó dejar el correo en pausa y priorizar que la web se vea con su dominio. Se volvió a comprobar HTTPS en `https://saltaemplea.com/`: HTTP 200, portada de Salta Emplea y canónica propia; el ingreso al panel también respondió 200. Se agregó `www.saltaemplea.com` al mismo proyecto, sin cambiar registros DNS existentes: Vercel lo verifica y una petición HTTPS devuelve **308** al dominio principal. No se realizaron compras ni cambios de plan.
