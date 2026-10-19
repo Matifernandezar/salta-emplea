@@ -4,7 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#123e49">
-  <meta name="description" content="Encontrá ofertas de trabajo en Salta y oportunidades remotas accesibles desde la provincia. Postulate por el canal original del aviso.">
+  <meta name="description" content="{{ page_meta.description }}">
+  {% if not page_meta.indexable %}<meta name="robots" content="noindex, follow">{% endif %}
+  {% if page_meta.canonical %}
+  <link rel="canonical" href="{{ page_meta.canonical }}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_AR">
+  <meta property="og:site_name" content="{{ page_meta.site_name }}">
+  <meta property="og:title" content="{{ page_meta.title }}">
+  <meta property="og:description" content="{{ page_meta.description }}">
+  <meta property="og:url" content="{{ page_meta.canonical }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ page_meta.title }}">
+  <meta name="twitter:description" content="{{ page_meta.description }}">
+  {% endif %}
   <title>{% block title %}Trabajo en Salta{% endblock %} · Salta Emplea</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -51,6 +64,7 @@
 <a href="{{ url_for('admin') }}">Panel de administración</a>
 </nav>
 <p class="small">Para pedir una corrección o el retiro de un aviso, usá “Reportar un problema” en la oferta.</p>
+{% if legal_identity.email %}<p class="small">Contacto y privacidad: <a href="{{ legal_identity.mailto }}">{{ legal_identity.email }}</a></p>{% endif %}
 </div>
     </div>
   </footer>

@@ -18,7 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import db, domain, extraction, image_pipeline, source_catalog
+from . import db, domain, extraction, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
 from .config import load_env
 
 
@@ -34,9 +34,23 @@ def create_app(config=None):
         CRON_SECRET=os.environ.get('CRON_SECRET', ''),
         UPLOAD_DIR=os.environ.get('UPLOAD_DIR', str(Path(app.instance_path) / 'uploads')),
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', ''),
+        PUBLIC_RESPONSIBLE_NAME=os.environ.get('PUBLIC_RESPONSIBLE_NAME', ''),
+        PUBLIC_CONTACT_EMAIL=os.environ.get('PUBLIC_CONTACT_EMAIL', ''),
         APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
+        RESEND_WEBHOOK_SECRET=os.environ.get('RESEND_WEBHOOK_SECRET', ''),
+        MAIL_DAILY_LIMIT=os.environ.get('MAIL_DAILY_LIMIT', '100'),
+        MAIL_MONTHLY_LIMIT=os.environ.get('MAIL_MONTHLY_LIMIT', '3000'),
+        MAIL_CONFIRMATION_RESERVE_DAILY=os.environ.get('MAIL_CONFIRMATION_RESERVE_DAILY', '10'),
+        MAIL_CONFIRMATION_RESERVE_MONTHLY=os.environ.get('MAIL_CONFIRMATION_RESERVE_MONTHLY', '100'),
+        RETENTION_UNCONFIRMED_DAYS=os.environ.get('RETENTION_UNCONFIRMED_DAYS', '30'),
+        RETENTION_BATCH_LIMIT=os.environ.get('RETENTION_BATCH_LIMIT', '100'),
+        RETENTION_SCAN_LIMIT=os.environ.get('RETENTION_SCAN_LIMIT', '1000'),
+        OPERATIONS_COLLECT_MAX_AGE_HOURS=os.environ.get('OPERATIONS_COLLECT_MAX_AGE_HOURS', '48'),
+        OPERATIONS_EXPIRE_MAX_AGE_HOURS=os.environ.get('OPERATIONS_EXPIRE_MAX_AGE_HOURS', '48'),
+        OPERATIONS_MAIL_MAX_AGE_HOURS=os.environ.get('OPERATIONS_MAIL_MAX_AGE_HOURS', '48'),
+        OPERATIONS_MAIL_QUEUE_MAX_AGE_HOURS=os.environ.get('OPERATIONS_MAIL_QUEUE_MAX_AGE_HOURS', '48'),
         GOOGLE_VISION_API_KEY=os.environ.get('GOOGLE_VISION_API_KEY', ''),
         OCR_ENABLED=os.environ.get('OCR_ENABLED', '0'),
         OCR_MONTHLY_LIMIT=os.environ.get('OCR_MONTHLY_LIMIT', '100'),
@@ -78,6 +92,8 @@ def create_app(config=None):
             g.db = db.connect(app.config['DATABASE_TARGET'])
         return g.db
 
+    app.register_blueprint(mail_webhooks.create_blueprint(connection))
+
     @app.teardown_appcontext
     def close_db(_error=None):
         conn = g.pop('db', None)
@@ -108,6 +124,13 @@ def create_app(config=None):
     app.jinja_env.filters['deadline'] = deadline_date
     app.jinja_env.filters['deadline_input'] = lambda value: deadline_date(value, True)
 
+    @app.context_processor
+    def public_page_context():
+        return {'page_meta': public_metadata.page_metadata(
+            app.config, request.endpoint,
+            filtered=request.endpoint == 'index' and bool(request.query_string),
+            method=request.method), 'legal_identity': public_metadata.legal_identity(app.config)}
+
     def limited(action, limit=10, seconds=3600):
         # Se almacena un hash salado del IP; no se confía en X-Forwarded-For sin proxy configurado.
         key = hashlib.sha256((app.config['SECRET_KEY'] + action + (request.remote_addr or 'local')).encode()).hexdigest()
@@ -121,6 +144,10 @@ def create_app(config=None):
 
     @app.before_request
     def protect():
+        # La firma del proveedor reemplaza CSRF exclusivamente en este endpoint.
+        # El blueprint la verifica antes de abrir la base o procesar datos.
+        if request.endpoint == 'mail_webhooks.resend':
+            return
         if request.method == 'POST':
             supplied = request.form.get('csrf_token', '')
             # La baja de un clic usa un token firmado, nunca un ID predecible.
@@ -142,6 +169,11 @@ def create_app(config=None):
             response.headers['Cache-Control'] = 'no-store'
             response.headers['Referrer-Policy'] = 'no-referrer'
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+        elif (response.status_code >= 400 or request.method not in ('GET', 'HEAD') or
+              request.endpoint not in ('index', 'job_detail', 'privacy', 'terms', 'sitemap', 'robots', 'static') or
+              (request.endpoint == 'index' and request.query_string) or
+              (request.endpoint in ('privacy', 'terms') and not public_metadata.legal_identity(app.config)['complete'])):
+            response.headers['X-Robots-Tag'] = 'noindex, follow'
         return response
 
     def admin_required(fn):
@@ -166,6 +198,14 @@ def create_app(config=None):
 
     def settings_dict():
         return {r['key']: r['value'] for r in connection().execute('SELECT * FROM settings')}
+
+    def mail_submission_ready():
+        from . import mailer
+        if production:
+            return (mailer._valid_delivery_config(app.config)
+                    and public_metadata.legal_identity(app.config)['complete'])
+        # Desarrollo prueba una bandeja inerte; send_outbox impide los envíos.
+        return bool(app.config['PUBLIC_BASE_URL'] and app.config['RESEND_API_KEY'] and app.config['MAIL_FROM'])
 
     def channels():
         settings = settings_dict()
@@ -199,12 +239,12 @@ def create_app(config=None):
         job = domain.public_job(connection(), job_id)
         if not job:
             abort(404)
-        base = app.config['PUBLIC_BASE_URL'].rstrip('/')
-        job['share_url'] = base + url_for('job_detail', job_id=job_id) if base else request.base_url
+        job['share_url'] = public_metadata.public_url(app.config, url_for('job_detail', job_id=job_id)) or url_for('job_detail', job_id=job_id)
         job['share_text'] = f"{job['title']} · {job.get('company') or 'Empresa no informada'} · {job.get('location') or 'Localidad no informada'}. {job['share_url']}"
         job['whatsapp_url'] = 'https://wa.me/?' + urlencode({'text': job['share_text']})
         ch = {c['key']: c['enabled'] for c in channels()}
-        return render_template('job.html', job=job, channels=ch, share_url=job['share_url'], share_text=job['share_text'])
+        return render_template('job.html', job=job, channels=ch, share_url=job['share_url'], share_text=job['share_text'],
+                               page_meta=public_metadata.page_metadata(app.config, 'job_detail', job=job))
 
     @app.post('/ofertas/<int:job_id>/reportar')
     def report(job_id):
@@ -380,6 +420,9 @@ def create_app(config=None):
             mail_key_present=bool(app.config['RESEND_API_KEY']),
             mail_sender_present=bool(app.config['MAIL_FROM']),
             mail_ready=mailer._valid_delivery_config(app.config),
+            mail_quota=mailer.quota_status(conn, app.config),
+            mail_webhook_ready=bool(app.config['RESEND_WEBHOOK_SECRET']),
+            operational=operations.operations_snapshot(conn, app.config),
             cron_key_present=bool(app.config['CRON_SECRET']),
             cron_last=cron_last['created_at'] if cron_last else None,
             automatic_sources=sum(source['collectible'] for source in sources),
@@ -650,11 +693,12 @@ def create_app(config=None):
             frequency = request.form.get('frequency', 'weekly')
             if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email) or len(email) > 254 or frequency not in ('daily', 'weekly') or not request.form.get('consent'):
                 flash('Ingresá un correo válido, frecuencia y consentimiento.', 'error')
-            elif not (app.config['PUBLIC_BASE_URL'] and app.config['RESEND_API_KEY'] and app.config['MAIL_FROM']):
+            elif not mail_submission_ready():
                 return render_template('message.html', title='Alertas pendientes de configuración', message='El envío de correo todavía no está habilitado. No registramos tu dirección. Podés consultar las ofertas en la web.')
             else:
                 conn = connection()
                 with conn:
+                    db.mailer_lock(conn)
                     row = conn.execute('SELECT * FROM subscribers WHERE email=?', (email,)).fetchone()
                     if not row:
                         cursor = conn.execute('INSERT INTO subscribers(email,locality,sector,modality,frequency,status,token_hash,created_at) VALUES (?,?,?,?,?,?,?,?)', (email, request.form.get('location', '')[:150], request.form.get('sector', '')[:150], request.form.get('modality', '')[:40], frequency, 'pending', '', domain.now()))
@@ -664,10 +708,10 @@ def create_app(config=None):
                     else:
                         subscriber_id = row['id']
                         conn.execute("UPDATE subscribers SET status='pending',locality=?,sector=?,modality=?,frequency=? WHERE id=?", (request.form.get('location', '')[:150], request.form.get('sector', '')[:150], request.form.get('modality', '')[:40], frequency, subscriber_id))
-                if subscriber_id:
-                    mailer.queue_confirmation(conn, subscriber_id, app.config['PUBLIC_BASE_URL'], app.config['SECRET_KEY'])
+                    if subscriber_id:
+                        mailer.queue_confirmation(conn, subscriber_id, app.config['PUBLIC_BASE_URL'], app.config['SECRET_KEY'])
                 return render_template('message.html', title='Solicitud recibida', message='Si corresponde, recibirás un enlace para confirmar el correo. La suscripción se activa solo después de confirmarlo. Si ya estás suscripto, conservamos tus preferencias.')
-        return render_template('subscribe.html', data=request.form, mail_ready=bool(app.config['RESEND_API_KEY'] and app.config['MAIL_FROM']))
+        return render_template('subscribe.html', data=request.form, mail_ready=mail_submission_ready())
 
     @app.route('/alertas/confirmar/<token>', methods=['GET', 'POST'])
     def confirm_subscription(token):
@@ -681,6 +725,12 @@ def create_app(config=None):
             abort(400, 'Este enlace ya no está disponible.')
         if request.method == 'POST':
             with connection():
+                db.mailer_lock(connection())
+                current = connection().execute('SELECT token_hash,status,email FROM subscribers WHERE id=?', (subscriber_id,)).fetchone()
+                if (not current or current['status'] == 'unsubscribed' or
+                        not hmac.compare_digest(current['token_hash'] or '', digest) or
+                        mailer.is_suppressed(connection(), current['email'])):
+                    abort(400, 'Este enlace ya no está disponible.')
                 connection().execute("UPDATE subscribers SET status='confirmed',confirmed_at=? WHERE id=?", (domain.now(), subscriber_id))
             return render_template('message.html', title='Suscripción confirmada', message='Recibirás ofertas aprobadas según tus preferencias. Cada correo incluye el enlace de baja.')
         return render_template('confirm.html', title='Confirmar suscripción', message='Confirmá que querés recibir estas alertas de empleo.', action_url=request.path)
@@ -694,18 +744,38 @@ def create_app(config=None):
             abort(400, 'El enlace no es válido.')
         if request.method == 'POST':
             with connection():
-                connection().execute("UPDATE subscribers SET status='unsubscribed' WHERE id=?", (subscriber_id,))
+                db.mailer_lock(connection())
+                connection().execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber_id,))
                 connection().execute("UPDATE outbox SET status='cancelled' WHERE subscriber_id=? AND status IN ('pending','retry')", (subscriber_id,))
             return render_template('message.html', title='Baja confirmada', message='La suscripción quedó desactivada. No recibirás nuevas alertas.')
         return render_template('confirm.html', title='Dar de baja las alertas', message='Podés cancelar tu suscripción con un clic.', action_url=request.path)
 
     @app.get('/privacidad')
     def privacy():
-        return render_template('message.html', title='Privacidad', message='No solicitamos cuentas ni almacenamos CV. Si activás alertas, guardamos tu correo, preferencias y consentimiento para enviarte ofertas hasta tu baja. Los reportes y aportes se usan para revisar contenido. Las imágenes aportadas son privadas para revisión. La lectura automática, si se habilita y se autoriza para esa imagen, envía una copia a Google Cloud Vision para extraer texto; no publica la imagen ni aprueba el aviso. No adjuntes CV, documentos personales ni datos sensibles. La publicidad externa puede cargar imágenes del anunciante. Podés solicitar corrección, retiro o eliminación desde el reporte de una oferta. Responsable y contacto institucional: pendientes de definir antes del lanzamiento público. Retención y ejercicio de derechos: consultar la guía de operación antes de publicar.')
+        return render_template('legal.html', title='Privacidad', document='privacy',
+                               ocr_paused=not image_pipeline.configured(app.config))
 
     @app.get('/condiciones')
     def terms():
-        return render_template('message.html', title='Condiciones del servicio', message='Salta Emplea es un nombre provisional para un servicio gratuito que centraliza avisos de terceros en Salta y empleos remotos accesibles desde la provincia. No garantiza la contratación ni la exactitud permanente del aviso original. La postulación se realiza con el contacto publicado. Nunca pagues para postularte. Revisá la fuente y reportá errores o pedidos de retiro. No hay verificación de empresas ni cobertura total de fuentes. Solo compartí contenido que tengas permiso de aportar. Antes del lanzamiento se completará la identificación del responsable y el contacto institucional.')
+        return render_template('legal.html', title='Condiciones del servicio', document='terms')
+
+    @app.get('/sitemap.xml')
+    def sitemap():
+        try:
+            content = public_metadata.sitemap_xml(app.config, domain.public_jobs(connection()))
+        except ValueError:
+            abort(503)
+        return app.response_class(content, mimetype='application/xml')
+
+    @app.get('/robots.txt')
+    def robots():
+        # Estas reglas orientan rastreadores; los permisos se controlan en servidor.
+        lines = ['User-agent: *', 'Allow: /', 'Disallow: /admin', 'Disallow: /api/',
+                 'Disallow: /alertas/', 'Disallow: /salud']
+        sitemap_url = public_metadata.public_url(app.config, '/sitemap.xml')
+        if sitemap_url:
+            lines += ['', 'Sitemap: ' + sitemap_url]
+        return app.response_class('\n'.join(lines) + '\n', mimetype='text/plain')
 
     @app.get('/salud')
     def health():

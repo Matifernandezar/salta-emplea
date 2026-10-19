@@ -25,6 +25,16 @@ def main():
     tasks.add_argument('--only', choices=['collect', 'expire', 'mail', 'extract'])
     backup = commands.add_parser('backup', help='Respaldo consistente de SQLite; PostgreSQL usa pg_dump')
     backup.add_argument('destination')
+    postgres_backup = commands.add_parser('backup-postgres', help='Respaldo PostgreSQL privado; no inicia la aplicación')
+    postgres_backup.add_argument('destination')
+    verify_backup = commands.add_parser('verify-backup', help='Comprobar integridad del archivo y manifiesto PostgreSQL')
+    verify_backup.add_argument('archive')
+    restore_backup = commands.add_parser('restore-postgres-isolated', help='Ensayar recuperación exclusivamente en una base nueva aislada')
+    restore_backup.add_argument('archive')
+    restore_backup.add_argument('--confirm-isolation', action='store_true')
+    commands.add_parser('retention-preview', help='Vista previa de retención: solo lectura y contadores')
+    retention_apply = commands.add_parser('retention-apply', help='Aplicar limpieza acotada; hacer backup y revisar la vista previa')
+    retention_apply.add_argument('--confirm-deletion', action='store_true')
     forget = commands.add_parser('forget-email', help='Eliminar correo y registros asociados a pedido del titular')
     forget.add_argument('email')
     reconcile = commands.add_parser('reconcile-mail', help='Resolver envío incierto tras verificar proveedor; nunca reenvía')
@@ -41,6 +51,29 @@ def main():
         import secrets
         print(secrets.token_hex(32))
         return
+    if args.command in ('backup-postgres', 'verify-backup', 'restore-postgres-isolated'):
+        from .backup import BackupError, backup_postgres, restore_postgres_isolated, verify_archive
+        from .config import load_env
+
+        try:
+            load_env()
+            if args.command == 'backup-postgres':
+                backup_postgres(os.environ.get('DATABASE_URL', ''), args.destination)
+                print('Respaldo PostgreSQL privado y manifiesto creados. Cifrar la copia externa y comprobar restauración.')
+            elif args.command == 'verify-backup':
+                verify_archive(args.archive)
+                print('Integridad y permisos comprobados. Esto no autentica el origen ni demuestra restauración.')
+            else:
+                restore_postgres_isolated(args.archive, os.environ.get('POSTGRES_RESTORE_URL', ''),
+                                          isolation_confirmed=args.confirm_isolation)
+                print('Restauración aislada completada y puesta en cuarentena. No se activó la aplicación ni se envió correo.')
+        except BackupError as exc:
+            print(f'RESPALDO: ERROR — {exc} Referencia: {exc.code}.')
+            return 1
+        except (OSError, ValueError):
+            print('RESPALDO: ERROR — No se pudo leer la configuración o el archivo privado.')
+            return 1
+        return 0
     if args.command == 'check-production':
         from .config import load_env
         from .deployment import check_production
@@ -83,14 +116,30 @@ def main():
                 os.umask(old_mask)
             print('Respaldo consistente creado. Incluir uploads y entorno por separado.')
         elif args.command == 'forget-email':
+            from . import mailer
             with conn:
+                db.mailer_lock(conn)
                 subscriber = conn.execute('SELECT id FROM subscribers WHERE email=?', (args.email.lower(),)).fetchone()
                 if subscriber:
                     for table in ('deliveries', 'outbox'):
                         conn.execute(f'DELETE FROM {table} WHERE subscriber_id=?', (subscriber['id'],))
                     conn.execute('DELETE FROM subscribers WHERE id=?', (subscriber['id'],))
                 conn.execute('UPDATE reports SET contact=NULL WHERE contact=?', (args.email.lower(),))
+                conn.execute('DELETE FROM settings WHERE key=?', (mailer.suppression_key(args.email),))
             print('Datos de correo eliminados si existían; coordinar retención de respaldos.')
+        elif args.command in ('retention-preview', 'retention-apply'):
+            from . import retention
+            config = dict(app.config)
+            try:
+                if args.command == 'retention-preview':
+                    result = retention.preview(conn, config)
+                else:
+                    config['RETENTION_APPLY_CONFIRMED'] = args.confirm_deletion
+                    result = retention.apply(conn, config)
+                print(json.dumps(result, ensure_ascii=False))
+            except ValueError:
+                print('RETENCIÓN: ERROR — Revisá la política y confirmá explícitamente la aplicación con --confirm-deletion.')
+                return 1
         elif args.command == 'reconcile-mail':
             with conn:
                 conn.execute("UPDATE outbox SET status=?,last_error='Conciliado manualmente con el proveedor.' WHERE id=? AND status='uncertain'", (args.result, args.id))

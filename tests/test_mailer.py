@@ -360,3 +360,240 @@ def test_cola_acumulada_respeta_frecuencia_al_reanudar_envios(database, config, 
     assert outbox(database)["status"] == "pending"
     assert outbox(database)["attempts"] == 0
     assert outbox(database)["next_attempt_at"] > mailer._stamp()
+
+
+def _small_quota(config, *, daily=100, monthly=3000, reserve_daily=0, reserve_monthly=0):
+    config.update(MAIL_DAILY_LIMIT=daily, MAIL_MONTHLY_LIMIT=monthly,
+                  MAIL_CONFIRMATION_RESERVE_DAILY=reserve_daily,
+                  MAIL_CONFIRMATION_RESERVE_MONTHLY=reserve_monthly)
+
+
+def test_cupo_diario_conserva_pendientes_sin_consumir_intentos(database, config, monkeypatch):
+    for _ in range(3):
+        subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    _small_quota(config, daily=2)
+    calls = []
+    monkeypatch.setattr(mailer, "urlopen", lambda request, timeout: calls.append(request) or Accepted())
+    result = mailer.send_outbox(database, config)
+    assert (result["sent"], result["skipped"], result["quota_reached"]) == (2, 1, True)
+    assert len(calls) == 2
+    assert outbox(database)["status"] == "pending"
+    assert outbox(database)["attempts"] == 0
+    assert mailer.send_outbox(database, config)["quota_reached"]
+    assert len(calls) == 2
+    status = mailer.quota_status(database, config)
+    assert status["daily"]["used"] == 2
+    assert status["monthly"]["used"] == 2
+    reservations = database.execute("SELECT detail FROM audit WHERE action='mail_reserved'").fetchall()
+    assert [row["detail"] for row in reservations] == ["digest", "digest"]
+
+
+def test_cupo_mensual_no_se_reinicia_al_cambiar_el_dia(database, config, monkeypatch):
+    from datetime import datetime, timezone
+
+    instant = datetime(2026, 10, 10, 23, 59, tzinfo=timezone.utc)
+    monkeypatch.setattr(mailer, "_now", lambda: instant)
+    for _ in range(2):
+        subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    _small_quota(config, daily=1, monthly=1)
+    calls = []
+    monkeypatch.setattr(mailer, "urlopen", lambda request, timeout: calls.append(request) or Accepted())
+    assert mailer.send_outbox(database, config)["sent"] == 1
+    monkeypatch.setattr(mailer, "_now", lambda: instant + timedelta(minutes=2))
+    assert mailer.quota_status(database, config)["daily"]["used"] == 0
+    assert mailer.send_outbox(database, config)["quota_reached"]
+    assert len(calls) == 1
+    assert outbox(database)["attempts"] == 0
+    monkeypatch.setattr(mailer, "_now", lambda: instant.replace(month=11, day=1))
+    assert mailer.send_outbox(database, config)["sent"] == 1
+    assert len(calls) == 2
+
+
+def test_prioriza_confirmaciones_y_reserva_capacidad_que_no_usan_resumenes(database, config, monkeypatch):
+    for _ in range(3):
+        subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    pending_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, pending_id, BASE_URL, SECRET)
+    _small_quota(config, daily=3, monthly=3, reserve_daily=2, reserve_monthly=2)
+    calls = []
+    monkeypatch.setattr(mailer, "urlopen", lambda request, timeout: calls.append(request) or Accepted())
+    result = mailer.send_outbox(database, config)
+    assert result["sent"] == 2
+    assert result["quota_reached"]
+    assert "Confirmá" in json.loads(calls[0].data)["subject"]
+    assert "Nuevas ofertas" in json.loads(calls[1].data)["subject"]
+    # Queda capacidad reservada para otra confirmación, no para un resumen.
+    another_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, another_id, BASE_URL, SECRET)
+    assert mailer.send_outbox(database, config)["sent"] == 1
+    assert mailer.quota_status(database, config)["daily"]["used"] == 3
+    assert len(calls) == 3
+
+
+def test_fallo_explicito_cuenta_y_cupo_no_borra_reserva_ni_reintenta(database, config, monkeypatch):
+    subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    _small_quota(config, daily=1)
+    calls = []
+
+    def provider(request, timeout):
+        calls.append(request)
+        raise HTTPError(request.full_url, 503, "no registrar datos externos", {}, None)
+
+    monkeypatch.setattr(mailer, "urlopen", provider)
+    assert mailer.send_outbox(database, config)["errors"] == 1
+    with database:
+        database.execute("UPDATE outbox SET next_attempt_at=NULL")
+    assert mailer.send_outbox(database, config)["quota_reached"]
+    assert len(calls) == 1
+    assert outbox(database)["status"] == "pending"
+    assert outbox(database)["attempts"] == 1
+    assert mailer.quota_status(database, config)["daily"]["used"] == 1
+
+
+def test_cupo_se_reserva_antes_de_red_y_serializa_trabajadores(database, config, monkeypatch):
+    for _ in range(2):
+        subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    _small_quota(config, daily=1)
+    second = connect(database.execute("PRAGMA database_list").fetchone()[2])
+    calls = []
+
+    def provider(request, timeout):
+        calls.append(request)
+        assert mailer.quota_status(second, config)["daily"]["used"] == 1
+        assert mailer.send_outbox(second, config)["quota_reached"]
+        return Accepted()
+
+    monkeypatch.setattr(mailer, "urlopen", provider)
+    try:
+        assert mailer.send_outbox(database, config)["sent"] == 1
+        assert len(calls) == 1
+        assert outbox(database)["attempts"] == 0
+    finally:
+        second.close()
+
+
+@pytest.mark.parametrize("limit", [0, -1, "sin límite", "1.5", None, True])
+def test_limite_invalido_o_cero_no_envia(database, config, monkeypatch, limit):
+    subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    _small_quota(config, daily=limit)
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+    assert mailer.send_outbox(database, config)["quota_reached"]
+    assert outbox(database)["status"] == "pending"
+    assert outbox(database)["attempts"] == 0
+
+
+@pytest.mark.parametrize("sender", ["onboarding@resend.dev", "Alertas <x@sub.resend.dev>",
+                                   "x@example.com", "x@pruebas.test"])
+def test_remitente_de_pruebas_no_se_presenta_como_produccion(database, config, monkeypatch, sender):
+    subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    config["MAIL_FROM"] = sender
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+    assert mailer.send_outbox(database, config)["skipped"] == 1
+    assert mailer.quota_status(database, config)["daily"]["used"] == 0
+
+
+def test_supresion_persistente_impide_reactivacion_por_nueva_solicitud(database, config, monkeypatch):
+    subscriber_id = subscriber(database, status="pending")
+    row = database.execute("SELECT email FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()
+    with database:
+        database.execute("INSERT INTO settings(key,value) VALUES (?,?)", (mailer.suppression_key(row["email"]), "{}"))
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["skipped"] == 1
+    assert database.execute("SELECT status FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()[0] == "unsubscribed"
+    assert database.execute("SELECT count(*) FROM outbox").fetchone()[0] == 0
+
+
+def test_supresion_posterior_a_cola_cancela_antes_de_reservar_cupo(database, config, monkeypatch):
+    subscriber_id = subscriber(database)
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    row = database.execute("SELECT email FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()
+    with database:
+        database.execute("INSERT INTO settings(key,value) VALUES (?,?)", (mailer.suppression_key(row["email"]), "{}"))
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+    assert mailer.send_outbox(database, config)["skipped"] == 1
+    assert outbox(database)["status"] == "cancelled"
+    assert outbox(database)["attempts"] == 0
+    assert mailer.quota_status(database, config)["daily"]["used"] == 0
+
+
+def test_re_suscripcion_revocada_crea_nonce_nuevo_y_no_revalida_confirmacion_enviada(database, config, monkeypatch):
+    subscriber_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)
+    previous = dict(outbox(database))
+    old_token = previous["body"].split("/alertas/confirmar/")[1].split("\n")[0]
+    # Fixture de una confirmación anteriormente enviada; no se contacta proveedor.
+    with database:
+        database.execute("UPDATE outbox SET status='sent',attempts=1,sent_at=? WHERE id=?", (mailer._stamp(), previous["id"]))
+        database.execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber_id,))
+        database.execute("UPDATE subscribers SET status='pending' WHERE id=?", (subscriber_id,))
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["queued"] == 1
+    current = outbox(database)
+    new_token = current["body"].split("/alertas/confirmar/")[1].split("\n")[0]
+    assert old_token != new_token
+    current_hash = database.execute("SELECT token_hash FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()[0]
+    assert mailer.verify_token(new_token, SECRET, "confirm") == (subscriber_id, current_hash)
+    assert mailer.verify_token(old_token, SECRET, "confirm")[1] != current_hash
+    assert current["idempotency_key"] != previous["idempotency_key"]
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["skipped"] == 1
+    calls = []
+    monkeypatch.setattr(mailer, "urlopen", lambda request, timeout: calls.append(request) or Accepted())
+    assert mailer.send_outbox(database, config)["sent"] == 1
+    assert len(calls) == 1
+    assert new_token in json.loads(calls[0].data)["text"]
+    assert old_token not in json.loads(calls[0].data)["text"]
+    assert database.execute("SELECT status,attempts FROM outbox WHERE id=?", (previous["id"],)).fetchone()["attempts"] == 1
+
+
+def test_confirmacion_enviada_con_hash_vigente_no_se_renueva_antes_de_vencer(database):
+    subscriber_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)
+    before = outbox(database)["idempotency_key"]
+    with database:
+        database.execute("UPDATE outbox SET status='sent',attempts=1")
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["skipped"] == 1
+    assert outbox(database)["idempotency_key"] == before
+    with database:
+        database.execute("UPDATE outbox SET created_at=?", (mailer._stamp(mailer._now() - timedelta(days=3)),))
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["queued"] == 1
+    assert outbox(database)["idempotency_key"] != before
+
+
+@pytest.mark.parametrize("older_than_latest", [False, True])
+def test_re_suscripcion_no_repite_confirmacion_incierta_ni_borra_reservas(database, config, monkeypatch, older_than_latest):
+    subscriber_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)
+    old = outbox(database)
+    with database:
+        database.execute("UPDATE outbox SET status='uncertain',attempts=1,created_at=? WHERE id=?",
+                         (mailer._stamp(mailer._now() - timedelta(days=3)), old["id"]))
+        database.execute("INSERT INTO audit(actor,action,entity_id,detail,created_at) VALUES ('mailer','mail_reserved',?,'confirmation',?)",
+                         (old["id"], mailer._stamp()))
+        database.execute("UPDATE subscribers SET token_hash='' WHERE id=?", (subscriber_id,))
+        if older_than_latest:
+            database.execute(
+                "INSERT INTO outbox(kind,subscriber_id,recipient,subject,body,idempotency_key,created_at,status) "
+                "VALUES ('confirmation',?,'prueba@pruebas.ar','PRUEBA','PRUEBA','confirmation-cancelled-local',?,'cancelled')",
+                (subscriber_id, mailer._stamp()),
+            )
+    before = database.execute("SELECT count(*) FROM outbox").fetchone()[0]
+    assert mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)["skipped"] == 1
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+    assert mailer.send_outbox(database, config)["sent"] == 0
+    assert database.execute("SELECT count(*) FROM outbox").fetchone()[0] == before
+    previous = database.execute("SELECT status,attempts FROM outbox WHERE id=?", (old["id"],)).fetchone()
+    assert tuple(previous) == ("uncertain", 1)
+    assert mailer.quota_status(database, config)["daily"]["used"] == 1

@@ -43,6 +43,10 @@ Para habilitar producción: validar el dominio remitente en Resend, configurar l
 
 La suscripción permite localidad, rubro, modalidad y frecuencia diaria/semanal; los filtros de localidad/rubro comparan el valor completo, ignorando mayúsculas, por lo que conviene copiar el nombre usado en el buscador. El consentimiento se confirma antes de alertar. La cola reserva cada pareja destinatario/oferta y comprueba aprobación, vigencia y consentimiento antes de enviar. La baja visible y de un clic cancela pendientes. Los registros privados permiten diagnosticar envíos sin inventar métricas.
 
+La preparación de producción incorpora cuotas diarias/mensuales y reserva de capacidad para confirmaciones. Los intentos quedan contados aunque fallen; al llegar al cupo los pendientes se conservan. La baja revoca el token de confirmación anterior; una nueva solicitud necesita un nonce nuevo. Los resultados inciertos requieren conciliación. El webhook firmado `/api/webhooks/resend` bloquea reactivaciones por rebotes o quejas y deduplica eventos; falta configurar y verificar el proveedor real. Ver CORREO.md. Tener claves presentes no garantiza remitente válido ni recepción.
+
+El panel Automatización también muestra antigüedad de corridas, llamadas autenticadas por tarea y cola pendiente. Este diagnóstico no certifica el origen de las llamadas ni instala un programador o monitoreo externo. Los backups PostgreSQL se operan con los comandos de RESPALDOS.md; `retention-preview` no escribe y `retention-apply --confirm-deletion` requiere revisar una limpieza concreta. No se hicieron borrados de producción ni se eliminan imágenes con esa herramienta.
+
 WhatsApp y redes ofrecen texto/enlace manual solo para ofertas aprobadas y activas. Habilitar o deshabilitar cada preparación desde Configuración. Eso no activa una publicación automática. Publicar exclusivamente en canales propios y autorizados. Los adaptadores oficiales futuros, sus permisos y costos están pendientes en `COSTOS.md`.
 
 ## Publicidad

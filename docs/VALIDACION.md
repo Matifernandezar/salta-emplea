@@ -1,5 +1,17 @@
 # Resultado por fase
 
+## Preparación de lanzamiento y recuperación — 19/10/2026
+
+Se pausó Google Vision guardando `OCR_ENABLED=0` como Secret, sin consultar ni retirar la clave, el cupo de 999 o los registros. El redespliegue `dpl_GYfrnTXaXnMzDA7hiN355ioWB84C`, commit `a2cd0d5`, terminó READY; `/publicar` respondió 200 sin la casilla de envío a Google. No se hicieron nuevas llamadas reales a Vision.
+
+Se incorporaron cuotas persistentes y reserva de confirmaciones, webhook Resend firmado/deduplicado y supresiones, revocación y renovación de tokens tras baja, bloqueo compartido en cambios de consentimiento, diagnóstico privado de operaciones, identidad legal configurable, metadatos y sitemap. En producción no se reciben suscripciones con remitente inválido o identidad pública incompleta. El código de recuperación usa pg_dump/pg_restore y un destino aislado con cuarentena; la retención tiene vista previa y aplicación explícita, sin borrar imágenes ni registros de idempotencia. No se cambió el esquema ni se cargaron ejemplos en producción.
+
+El ensayo OCR local usó tres imágenes propias PRUEBA y Tesseract con modelo inglés, sin red: error de caracteres de 1,91 %, 1,09 % y 47,14 %; el flyer de dos columnas cambió el orden de lectura y fallaron tildes. No había modelo español ni prueba móvil/Vercel. Se conserva transcripción manual, sin anunciar un OCR confiable. Ver OCR-SIN-API.md.
+
+La suite completa y el circuito Chromium de esta entrega se registrarán al finalizar CI. Las pruebas locales de correo usan respuestas sustituidas; no prueban recepción. El ensayo PostgreSQL requiere cliente 17 y una base de pruebas, nunca credenciales de producción.
+
+Siguen pendientes aceptación de la primera fuente, plan compatible con la programación, dominio/proveedor/remitente, identidad y contacto públicos y autorización de un correo de prueba. No hay cron instalado, correo real conectado, backup externo de producción ni retención automática. No se contrataron servicios, enviaron mensajes ni aprobaron ofertas en nombre del titular. El presupuesto es USD 30/mes; tarifas oficiales y dependencias se actualizaron en COSTOS.md.
+
 ## Diagnóstico de rechazo y recuperación de lectura — 18/10/2026
 
 El titular configuró Google Cloud Vision y eligió un cupo de 999 intentos mensuales. Se guardó la activación y ese cupo sin leer la clave, y se redesplegó el commit `b98d198` como `dpl_BMK5fkrrVE8aR5r14xkvHFRfGyhM`, READY. El formulario mostró consentimiento OCR, la salud SQL respondió correctamente y el cron siguió denegando solicitudes sin credencial. Esto confirmó configuración, no reconocimiento real.

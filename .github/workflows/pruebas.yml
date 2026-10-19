@@ -24,6 +24,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Instalar cliente PostgreSQL 17 para probar respaldos
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends postgresql-client-17
+          rm -rf /var/lib/apt/lists/*
       - name: Instalar dependencias
         run: pip install -r requirements-dev.txt
       - name: Probar con PostgreSQL aislado

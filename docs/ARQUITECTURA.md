@@ -6,11 +6,15 @@ El usuario eligió GitHub y Vercel. Se conserva Flask y el HTML renderizado; Pos
 
 La base se migra explícitamente en la preparación del despliegue. Los arranques y las peticiones PostgreSQL no crean tablas ni usan almacenamiento local. Las reservas editoriales y de correo usan bloqueos transaccionales; las tareas usan un lease persistente de 900 segundos, compatible con conexiones agrupadas. Las ejecuciones tienen un presupuesto cooperativo de 180 segundos y un máximo de 300 en Vercel; los pendientes se retoman sin duplicar publicaciones o envíos. Cada entorno debe usar una base y secretos propios.
 
-La propuesta inicial de servidor se conserva debajo como antecedente. La guía actual es VERCEL.md; precios y límites en VERCEL-COSTOS.md. No se contrataron servicios ni se consiguió todavía un despliegue público.
+La propuesta inicial de servidor se conserva debajo como antecedente. La guía actual es VERCEL.md; precios y límites en COSTOS.md. El backend está desplegado desde el 18/10/2026; no se contrató ni cambió ningún plan desde el asistente.
+
+Actualización 19/10: se agregaron cuotas persistentes de correo, webhook firmado con supresión y deduplicación, metadatos/sitemap, identidad legal configurable y diagnóstico operativo privado. Los comandos PostgreSQL de backup y ensayo de restauración son externos a HTTP; requieren cliente 17 y un destino privado. El plan de retención tiene vista previa y aplicación explícita, sin borrado automático ni eliminación de imágenes. No se modificó el esquema.
+
+Google Vision está pausado. El ensayo local de Tesseract con modelo inglés no acredita lectura confiable de flyers en español ni compatibilidad con Vercel; permanece la transcripción manual. Ver OCR-SIN-API.md. Fuente aceptada, dominio/remitente, recepción de correo, programación real y respaldo externo de producción siguen pendientes; código y pruebas aisladas no los habilitan.
 
 Decisión previa a implementar, 16/10/2026. Repositorio e infraestructura iniciales: espacio vacío; sin secretos, identidades de nube ni servicios contratados.
 
-## Arquitectura propuesta
+## Antecedente: arquitectura propuesta para servidor propio
 
 Monolito Python 3.12 + Flask, HTML renderizado por servidor y CSS local. SQLite con WAL, claves foráneas y migraciones versionadas; un único servidor con volumen persistente. Proceso CLI de tareas invocable por cron con bloqueo y registros. Gunicorn detrás de HTTPS. Esta arquitectura evita JavaScript obligatorio y servicios separados para la primera versión. SQLite es apropiado para un nodo con pocas escrituras; antes de escalar a varias réplicas se migra a PostgreSQL y almacenamiento compartido.
 
@@ -29,9 +33,9 @@ Datos: ofertas, procedencias, reportes, fuentes, suscripciones, bandeja de corre
 
 Investigación en curso, documentada en FUENTES.md antes de habilitar cualquier recolección. Los términos de Formación y Empleo de Salta y Computrabajo requieren no implementar scraping sin autorización. Remotive ofrece una API pública con condiciones y atribución; debe verificarse su acceso real y sus restricciones. Greenhouse y Lever no implican permiso de redistribución de cualquier empresa. Redes sociales: incorporación manual; no eludir login ni bloqueos.
 
-## Dependencias sin configurar
+## Dependencias del servidor alternativo, no desplegado
 
-Dominio y revisión de marca (Salta Emplea es provisional); servidor con disco persistente y HTTPS; contraseña del administrador y clave de sesión; dominio de correo validado y cuenta del proveedor; cron del servidor; acuerdos de fuentes; cuentas propias y permisos de Meta para futura difusión automática. No se contrata nada en esta fase. Los precios y límites verificados se documentan en COSTOS.md.
+Para ese servidor habría que configurar disco, HTTPS, claves y cron. En el Vercel activo ya están configurados Neon y acceso administrativo; faltan dominio/correo, fuentes aceptadas y autorizadas, programación compatible, copias externas y contacto público. Salta Emplea sigue siendo provisional. Los precios vigentes se documentan en COSTOS.md.
 
 ## Límites de operación
 

@@ -1,6 +1,6 @@
 # GitHub y Vercel
 
-Actualización: 18/10/2026. [Salta Emplea](https://salta-emplea.vercel.app) ejecuta Flask con PostgreSQL de Neon. La publicación estática anterior se conserva en Git, pero ya no es la raíz desplegada.
+Actualización: 19/10/2026. [Salta Emplea](https://salta-emplea.vercel.app) ejecuta Flask con PostgreSQL de Neon. La publicación estática anterior se conserva en Git, pero ya no es la raíz desplegada.
 
 ## Configuración activa
 
@@ -34,7 +34,7 @@ La base inicial está vacía. No se aprobaron ofertas automáticamente ni se car
 - Correo: faltan proveedor y remitente. Sin ellos, `/alertas` informa que no registra direcciones. Probar consentimiento, recepción, resumen y baja con una dirección propia antes de abrir suscripciones.
 - Tareas programadas: no instaladas. Usar `/admin/automatizacion` para lotes manuales. Los endpoints cron exigen Authorization Bearer `CRON_SECRET`; la existencia de la clave no demuestra programación. Verificar plan y precios antes de habilitar el archivo opcional.
 - WhatsApp y redes: textos y enlaces manuales para ofertas aprobadas. No hay proveedores automáticos ni cuentas conectadas.
-- Lectura de imágenes: módulo preparado, inicialmente deshabilitado. Requiere credencial de Google Cloud Vision, habilitación y consentimiento por archivo; ver LECTURA-DE-IMAGENES.md. No se comprobó una llamada real ni se contrató el servicio.
+- Lectura de imágenes: pausada el 19/10 mediante `OCR_ENABLED=0` y redespliegue `dpl_GYfrnTXaXnMzDA7hiN355ioWB84C`, READY. `/publicar` ya no ofrece envío a Google; no se hicieron nuevas llamadas ni se retiró la clave, el cupo o el historial. No hay lectura real exitosa. Ver LECTURA-DE-IMAGENES.md y OCR-SIN-API.md.
 - Operación: completar responsable/contacto en privacidad y condiciones, confirmar marca/dominio y comprobar restauración de backups en otra base. No se contrató ni cambió ningún plan.
 
 ## Actualizar y recuperar
@@ -42,5 +42,9 @@ La base inicial está vacía. No se aprobaron ofertas automáticamente ni se car
 Los cambios a main despliegan la raíz Flask conectada. Revisar pruebas, build, estado READY y `/salud`. Una falla de build conserva la publicación anterior. No modificar secretos para resolver un error sin identificar su causa; nunca copiarlos a Git o al chat.
 
 Las migraciones de `scripts/prepare_vercel.py` se ejecutan explícitamente durante el build; las futuras deben ser aditivas y versionadas. Un rollback de código no revierte la base. Usar respaldos del proveedor o `pg_dump` y ensayar restauración en una base independiente. El comando de backup SQLite no corresponde a Neon.
+
+Los comandos `backup-postgres`, `verify-backup` y `restore-postgres-isolated` operan fuera de HTTP; requieren cliente 17 y configuración privada independiente para el destino de ensayo. Ver RESPALDOS.md. No se instaló un destino externo ni un cron de respaldo de producción. La retención tiene vista previa y aplicación explícita: no se activa con un despliegue.
+
+Variables nuevas por nombre: `PUBLIC_RESPONSIBLE_NAME`, `PUBLIC_CONTACT_EMAIL`, `RESEND_WEBHOOK_SECRET`, `MAIL_DAILY_LIMIT`, `MAIL_MONTHLY_LIMIT`, `MAIL_CONFIRMATION_RESERVE_DAILY`, `MAIL_CONFIRMATION_RESERVE_MONTHLY`, los umbrales `OPERATIONS_*_MAX_AGE_HOURS` y límites `RETENTION_*` de `.env.example`. Identidad pública y dominio siguen pendientes del titular. No agregar `POSTGRES_RESTORE_URL` a la aplicación de producción: corresponde al entorno aislado de ensayo.
 
 La suite con PostgreSQL usa `POSTGRES_TEST_URL` y esquemas aleatorios que elimina al finalizar; jamás darle una conexión de producción. El navegador público usa solo consultas sin credenciales y no escribe ofertas ni envía correos. Los resultados y límites de cada comprobación están en VALIDACION.md.

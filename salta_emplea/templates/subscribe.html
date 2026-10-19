@@ -34,7 +34,7 @@
 <input name="consent" type="checkbox" value="1" required{% if data.consent %} checked{% endif %}>
 <span>Quiero recibir alertas de empleo por correo y acepto la <a href="{{ url_for('privacy') }}">política de privacidad</a>.</span>
 </label>
-<button class="button" type="submit">Solicitar suscripción →</button>
+<button class="button" type="submit"{% if mail_ready is defined and not mail_ready %} disabled{% endif %}>Solicitar suscripción →</button>
 <p class="small">Solo ofertas aprobadas y activas. Podés darte de baja desde cada correo. No solicitamos CV ni perfiles de candidatos.</p>
 </form>
 </div>{% endblock %}

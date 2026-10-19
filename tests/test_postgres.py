@@ -193,24 +193,35 @@ def test_postgres_mail_reservations_are_idempotent(postgres):
     assert mailer.send_outbox(conn, {"APP_ENV": "development"})["skipped"] == 1
 
 
-def test_postgres_http_serverless_editorial_images_alerts_and_cron(postgres, tmp_path):
+def test_postgres_http_serverless_editorial_images_alerts_and_cron(postgres, tmp_path, monkeypatch):
     """HTTP → reglas → PostgreSQL real → otra conexión, sin envíos externos."""
     from PIL import Image
     from werkzeug.security import generate_password_hash
 
     target, connect = postgres
     password = "contraseña-exclusiva-de-pruebas-postgresql"
-    origin = "https://example.test"
+    origin = "https://empleos.pruebas.ar"
     secret = "clave-ficticia-solo-para-pruebas-postgresql"
     app = create_app({
         "TESTING": True, "SERVERLESS": True, "DATABASE_URL": target,
         "SECRET_KEY": secret, "ADMIN_PASSWORD_HASH": generate_password_hash(password),
         "PUBLIC_BASE_URL": origin, "CRON_SECRET": "cron-ficticio-de-pruebas",
+        "PUBLIC_RESPONSIBLE_NAME": "RESPONSABLE DE PRUEBA", "PUBLIC_CONTACT_EMAIL": "contacto@example.test",
         "DATABASE_PATH": str(tmp_path / "no-debe-crearse.sqlite3"),
         "UPLOAD_DIR": str(tmp_path / "no-debe-crearse"),
-        # .test impide cualquier entrega real aunque se ejecute el cron mail.
-        "RESEND_API_KEY": "credencial-ficticia-solo-pruebas", "MAIL_FROM": "pruebas@example.test",
+        # Proveedor sustituido debajo: ninguna conexión ni entrega real.
+        "RESEND_API_KEY": "credencial-ficticia-solo-pruebas", "MAIL_FROM": "PRUEBA <alertas@pruebas.ar>",
     })
+    class Accepted:
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def getcode(self):
+            return 200
+        def read(self, *_args):
+            return b'{"id":"proveedor-ficticio-sin-entrega"}'
+    monkeypatch.setattr(mailer, 'urlopen', lambda *_args, **_kwargs: Accepted())
     public, admin = app.test_client(), app.test_client()
 
     def get(client, path, **kwargs):
@@ -369,3 +380,38 @@ def test_postgres_rejected_image_retry_is_private_serialized_and_consumed_once(p
     assert image_pipeline.result_for(first,job_id,name)['status']=='completed'
     job = first.execute('SELECT status,approved_at FROM jobs WHERE id=?',(job_id,)).fetchone()
     assert job['status']=='pending' and job['approved_at'] is None and domain.public_jobs(first)==[]
+
+
+def test_postgres_mail_quota_serializes_workers_and_verified_suppression_is_idempotent(postgres):
+    import json
+    from salta_emplea import mail_webhooks
+    _target, connection = postgres
+    first = connection()
+    email = 'prueba-cuota@example.test'
+    with first:
+        subscriber_id = first.execute(
+            "INSERT INTO subscribers(email,status,token_hash,created_at) VALUES (?,'confirmed','PRUEBA',?)",
+            (email, mailer._stamp()),
+        ).lastrowid
+        outbox_id = first.execute(
+            "INSERT INTO outbox(kind,subscriber_id,recipient,subject,body,idempotency_key,created_at) "
+            "VALUES ('confirmation',?,?,'PRUEBA','PRUEBA','cuota-pg',?)",
+            (subscriber_id, email, mailer._stamp()),
+        ).lastrowid
+    config = {'MAIL_DAILY_LIMIT': 1, 'MAIL_MONTHLY_LIMIT': 10}
+    barrier = Barrier(2)
+    def reserve():
+        conn = connection()
+        barrier.wait(timeout=10)
+        with mailer._transaction(conn):
+            return mailer._reserve_quota(conn, {'id': outbox_id, 'kind': 'confirmation'}, config)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(reserve) for _ in range(2)]
+        assert sorted(future.result(timeout=15) for future in futures) == [False, True]
+    assert mailer.quota_status(first, config)['daily']['used'] == 1
+    body = json.dumps({'type': 'email.bounced', 'data': {'to': [email]}}).encode()
+    assert mail_webhooks.process_verified_event(first, body, 'msg_pg_test')['status'] == 'processed'
+    assert mail_webhooks.process_verified_event(connection(), body, 'msg_pg_test')['status'] == 'duplicate'
+    assert first.execute('SELECT status FROM subscribers WHERE id=?', (subscriber_id,)).fetchone()[0] == 'unsubscribed'
+    assert mailer.is_suppressed(first, email)
+    assert first.execute("SELECT COUNT(*) FROM audit WHERE action='mail_reserved'").fetchone()[0] == 1

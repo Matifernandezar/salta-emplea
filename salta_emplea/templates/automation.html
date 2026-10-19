@@ -8,6 +8,22 @@
 <h1>Automatización</h1>
 {{ admin_nav('automation') }}
 <div class="notice">Las tareas incorporan avisos pendientes, comprueban vigencia y procesan correos con consentimiento. Solo vos podés aprobar ofertas. Tener variables configuradas no demuestra que el programador o un proveedor estén funcionando.</div>
+{% if operational is defined %}
+<section class="paper admin-section">
+<h2>Revisión operativa</h2>
+<p>{{ operational.scheduler.message }}</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Tarea</th><th>Corrida</th><th>Último éxito</th><th>Última llamada autenticada</th></tr></thead>
+<tbody>{% for item in operational.tasks %}<tr>
+<td>{{ item.label }}</td><td>{{ item.state_label }}</td>
+<td>{{ item.last_success_at|value }}<span class="table-detail">Pedir revisión después de {{ item.max_age_hours }} horas. Este umbral no programa tareas.</span></td>
+<td>{{ item.cron_received_at|value }}<span class="table-detail">Una llamada no identifica por sí sola al programador que la inició.</span></td>
+</tr>{% endfor %}</tbody></table></div>
+<p>{{ operational.mail_queue.message }}</p>
+<p>{{ operational.backups.message }}</p>
+<p>{{ operational.external_alerts.message }}</p>
+</section>
+{% endif %}
 <div class="admin-grid">
 <section class="paper admin-section">
 <h2>Configuración detectada</h2>
@@ -16,6 +32,11 @@
 <div><dt>Credencial de correo</dt><dd>{{ 'Presente' if mail_key_present else 'Pendiente' }}</dd></div>
 <div><dt>Remitente de correo</dt><dd>{{ 'Configurado' if mail_sender_present else 'Pendiente' }}</dd></div>
 <div><dt>Envío de correo</dt><dd>{% if mail_ready %}La configuración permite intentar envíos. No confirma la validez de la credencial, la autorización del remitente ni la entrega.{% else %}Deshabilitado por configuración incompleta o entorno de desarrollo. No se envían correos.{% endif %}</dd></div>
+<div><dt>Recepción de rebotes y quejas</dt><dd>{{ 'Clave de firma presente; falta comprobar la conexión y un evento real.' if mail_webhook_ready else 'Pendiente de configurar la clave de firma y los eventos en el proveedor.' }}</dd></div>
+{% if mail_quota is defined %}{% for period,label in [('daily','día UTC'),('monthly','mes UTC')] %}
+{% set quota = mail_quota[period] %}
+<div><dt>Reservas de correo del {{ label }}</dt><dd>{{ quota.used }} de {{ quota.limit }} intentos. Los resúmenes usan {{ quota.digest_used }} de {{ quota.digest_limit }}; el resto de la capacidad se reserva para confirmaciones. No incluye consumos de otras aplicaciones ni reemplaza la cuota del proveedor.</dd></div>
+{% endfor %}{% endif %}
 <div><dt>Credencial del cron</dt><dd>{{ 'Presente' if cron_key_present else 'Pendiente' }}. No demuestra que haya una programación activa.</dd></div>
 <div><dt>Última llamada autenticada al cron</dt><dd>{{ cron_last|value }}{% if not cron_last %}. No hay evidencia de llamadas autenticadas al cron.{% else %}. Una llamada recibida no garantiza que la tarea haya terminado; contrastá el registro de corridas.{% endif %}</dd></div>
 <div><dt>Fuentes compatibles activas y autorizadas</dt><dd>{{ automatic_sources }}. El permiso de acceso lo registra el administrador en Fuentes.</dd></div>

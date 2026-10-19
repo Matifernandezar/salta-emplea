@@ -1,5 +1,26 @@
 # Costos y cuentas pendientes
 
+## Presupuesto vigente — 19/10/2026
+
+La plataforma activa usa Flask, Vercel y PostgreSQL en Neon. El titular fijó un máximo de **USD 30 mensuales** y dejó Google Vision en pausa. No se contrató ni cambió ningún plan. Las herramientas disponibles no devuelven el plan de facturación del equipo de Vercel: no se lo infiere del hecho de poder desplegar.
+
+| Servicio | Precio de lista mensual | Capacidad y pendientes |
+| --- | --- | --- |
+| [Vercel Pro](https://vercel.com/docs/plans/pro-plan) | USD 20 | Un asiento para desplegar y USD 20 de crédito de uso; excedentes, otros asientos e impuestos aparte. Plan real pendiente de comprobar. |
+| [Neon Free](https://neon.com/pricing) | USD 0 | 1 GB, 100 CU-h por proyecto/mes y 5 GB de transferencia. Las imágenes privadas consumen base; vigilar cuotas. Recuperación limitada, no copia independiente. |
+| [Resend Free](https://resend.com/pricing) | USD 0 | 3000 correos/mes, 100/día y tres dominios. Confirmaciones y pruebas cuentan. Requiere dominio y remitente verificados. |
+| Dominio, copias externas y monitoreo | Pendiente de cotización concreta | Registrar pago inicial, renovación, almacenamiento y transferencia, sin prometer un precio para un nombre no elegido. |
+
+La base nominal de Pro más ambos planes gratuitos es USD 20, **antes de dominio, impuestos, respaldos y excesos**; no garantiza una factura final menor a USD 30. No se puede sumar Resend Pro de USD 20 manteniendo ese presupuesto junto con Vercel Pro. Al acercarse a cuotas hay que espaciar resúmenes y conservar pendientes, no ampliar planes automáticamente.
+
+[Vercel Hobby](https://vercel.com/docs/plans/hobby) admite uso personal no comercial; no asumir compatibilidad con la publicidad local prevista. [Cron](https://vercel.com/docs/cron-jobs/usage-and-pricing) permite en Hobby una ejecución diaria por tarea y en Pro hasta una por minuto; las funciones siguen consumiendo recursos. La propuesta de programación frecuente no se instaló sin verificar plan y dependencias.
+
+Los límites locales de correo reservan capacidad para confirmaciones y cuentan intentos fallidos o inciertos conservadoramente. No contabilizan otros consumidores de la misma cuenta ni sustituyen las cuotas o el ciclo del proveedor. Los presupuestos y alertas tampoco son un corte universal del gasto de todos los servicios.
+
+Antes de contratar, presentar la pantalla y condiciones vigentes, impuestos conocidos, costo fijo, unidades variables, límites, precio anual de dominio y renovación. Solicitar aprobación del costo concreto como último paso; tener un presupuesto no autoriza el pago. La configuración privada se completa por nombre de variable, sin compartir claves. Ver [CORREO.md](CORREO.md), [RESPALDOS.md](RESPALDOS.md) y [OCR-SIN-API.md](OCR-SIN-API.md).
+
+## Antecedente de servidor propio — no es la contratación vigente
+
 Consulta: **16/10/2026**. Importes en USD, antes de impuestos, conversión y dominio. No se contrató ningún servicio. Las tarifas deben reconfirmarse en la pantalla de contratación.
 
 ## Precios oficiales verificados
@@ -26,8 +47,8 @@ Ejemplo de volumen, no audiencia existente: 1.000 suscriptores semanales generan
 
 ## Cuentas y permisos
 
-- Servidor: cuenta del proveedor, región, facturación, SSH, DNS, HTTPS y responsable de actualizaciones. No hay alojamiento público configurado. El Dockerfile y Compose están preparados; falta probarlos en el servidor elegido.
-- Correo: cuenta Resend, dominio remitente validado por DNS, API y remitente autorizados; URL HTTPS estable y prueba real de confirmación, alerta y baja. Las variables se enumeran por nombre en `.env.example`. No se guardan secretos en Git. Revisar rebotes/supresiones en el proveedor; no se integró webhook de rebotes.
+- Servidor propio alternativo: cuenta del proveedor, región, facturación, SSH, DNS, HTTPS y actualizaciones. No está desplegado; el alojamiento público elegido es Vercel. Docker/Compose requieren prueba en ese servidor alternativo.
+- Correo: cuenta Resend, dominio remitente validado por DNS, API y remitente autorizados; prueba real de confirmación, recepción, resumen y baja. El webhook firmado de rebotes, quejas y supresiones está implementado; todavía no está conectado a una cuenta real. Variables por nombre en `.env.example`, sin secretos.
 - WhatsApp: compartir manualmente no requiere contratar la API. La automatización futura necesita activos propios de Meta, número, permisos, credenciales, consentimiento y posibles plantillas. Precio por país/categoría y proveedor: **pendiente**, consultar [tarifario oficial](https://business.whatsapp.com/products/platform-pricing). No se verificó publicación a canales o grupos mediante API compatible; no se promete.
 - Facebook/Instagram: identificar páginas/cuentas propias, tipo de cuenta, aplicación, permisos y revisión vigentes. Requisitos exactos, cuotas y costos de intermediario: **pendientes** en [Meta for Developers](https://developers.facebook.com/). Se entrega difusión manual; no adaptador automático simulado.
 - IA/OCR: no se contrató ni habilitó un proveedor. El módulo opcional de Cloud Vision y sus costos verificados se documentan en [LECTURA-DE-IMAGENES.md](LECTURA-DE-IMAGENES.md); empieza deshabilitado y las pruebas usan respuestas sustituidas. El texto pegado se prepara con reglas locales, sin costo de proveedor.
@@ -36,4 +57,4 @@ Ejemplo de volumen, no audiencia existente: 1.000 suscriptores semanales generan
 
 Salta Emplea es provisional. Disponibilidad y aranceles de registro/renovación en [NIC Argentina](https://nic.ar/) y antecedentes en [INPI](https://www.argentina.gob.ar/inpi) siguen pendientes. Un sitio vacío o una referencia DNS no acreditan disponibilidad. Dominio, impuestos y asesoramiento de marca no están incluidos en los totales.
 
-Sites no se adoptó: los auxiliares no estaban instalados y no se obtuvo una tarifa verificable. Cloudflare/Vercel no son necesarios para la arquitectura entregada. No se debe presentar esta estimación como presupuesto de esos servicios.
+Los precios del servidor propio son antecedentes y no deben sumarse a Vercel ni presentarse como cotización actual. La arquitectura activa y el presupuesto elegido se describen al principio de este documento.

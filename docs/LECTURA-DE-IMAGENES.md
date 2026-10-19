@@ -1,6 +1,8 @@
 # Lectura de imágenes y preparación de avisos
 
-La lectura de imágenes es opcional. **El titular configuró la clave y habilitó producción con un cupo de 999 intentos mensuales. Todavía no se verificó una lectura real exitosa con Google.** La primera prueba comunicada por el titular devolvió `credentials_rejected`: Google rechazó el acceso, sin precisar en ese registro antiguo si faltaba habilitar la API, la facturación o ajustar la clave. No se leyeron valores de secretos ni se contrataron servicios desde el asistente.
+La lectura de imágenes es opcional y está **pausada desde el 19/10/2026**. Se guardó `OCR_ENABLED=0` como Secret y se redesplegó la misma versión; `/publicar` respondió HTTP 200 sin la casilla de envío a Google. Se conservan la clave, el cupo de 999 y el historial, sin leer sus valores ni reiniciar reservas. No se hicieron nuevas llamadas reales al proveedor durante esta pausa.
+
+La primera prueba anterior comunicada por el titular devolvió `credentials_rejected`; no hay una lectura real exitosa verificada. El registro antiguo no precisa si faltaba API, facturación o corregir restricciones. La alternativa [OCR sin API de pago](OCR-SIN-API.md) se evaluó localmente y no alcanzó evidencia suficiente para ofrecer lectura confiable de flyers en español. Se mantiene la carga privada y transcripción manual. Las instrucciones siguientes son para una reactivación futura decidida por el titular, no para activar ahora el servicio.
 
 La preparación de texto pegado funciona localmente con etiquetas explícitas. No usa IA generativa ni tiene costo por consulta externa. Los datos ausentes siguen como «No informado» y ninguna preparación aprueba o publica el aviso.
 

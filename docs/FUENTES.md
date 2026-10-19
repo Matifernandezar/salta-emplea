@@ -1,6 +1,6 @@
 # Fuentes y nombre provisional
 
-Consulta documental: **16 de octubre de 2026, UTC**. Esta revisión identifica vías posibles; no demuestra cobertura total, vacantes vigentes ni una automatización operativa. No se contactó a ninguna organización.
+Consulta inicial: **16 de octubre de 2026, UTC**. El **19/10/2026** se volvió a consultar la documentación oficial de Jobicy: conserva el acceso público, reutilización con atribución y enlace canónico y máximo de una sincronización nueva por hora. No se hizo una nueva consulta a sus avisos ni se habilitó producción; la aceptación de esta fuente por el titular sigue pendiente. El resto del documento conserva su fecha y alcance originales. No se contactó a ninguna organización.
 
 ## Primera API candidata: Jobicy
 

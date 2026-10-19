@@ -6,6 +6,7 @@ Las credenciales, los tokens y los cuerpos de los correos no se registran.
 """
 
 import hashlib
+import hmac
 import ipaddress
 import json
 import re
@@ -17,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -29,6 +30,20 @@ CONFIRM_MAX_AGE = 48 * 60 * 60
 MAX_ATTEMPTS = 3
 MAX_DIGEST_JOBS = 30
 IDEMPOTENCY_WINDOW = timedelta(hours=23)
+DEFAULT_DAILY_LIMIT = 100
+DEFAULT_MONTHLY_LIMIT = 3000
+DEFAULT_CONFIRMATION_RESERVE_DAILY = 10
+DEFAULT_CONFIRMATION_RESERVE_MONTHLY = 100
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        return None
+
+
+def urlopen(request, timeout):
+    """El secreto del proveedor nunca sigue una redirección a otro destino."""
+    return build_opener(_NoRedirect()).open(request, timeout=timeout)
 
 
 def _now():
@@ -48,6 +63,69 @@ def _parse(value):
 
 def _counts(**values):
     return dict(queued=0, sent=0, skipped=0, errors=0) | values
+
+
+def suppression_key(email):
+    """Identificador seudónimo estable: no guardar direcciones en auditoría."""
+    digest = hashlib.sha256(str(email).strip().lower().encode()).hexdigest()
+    return "mail_suppressed:" + digest
+
+
+def is_suppressed(conn, email):
+    return conn.execute("SELECT 1 FROM settings WHERE key=?", (suppression_key(email),)).fetchone() is not None
+
+
+def _limit(config, name, default):
+    value = config.get(name, default)
+    # Una configuración inválida falla cerrada, en vez de quitar el límite.
+    if not isinstance(value, (str, int)) or isinstance(value, bool) or not re.fullmatch(r"[0-9]{1,9}", str(value)):
+        return 0
+    return int(value)
+
+
+def quota_status(conn, config, *, instant=None):
+    """Cuenta reservas persistentes, incluso intentos fallidos o inciertos.
+
+    Cada petición saliente consume capacidad conservadoramente; no se restan
+    reservas ni se depende de la retención de logs del proveedor. El calendario
+    UTC corresponde al límite diario publicado por Resend. El mes es calendario
+    local de la aplicación: comprobar también el ciclo de la cuenta del proveedor.
+    """
+    instant = (instant or _now()).astimezone(timezone.utc)
+    day_start = instant.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = day_start.replace(day=1)
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    result = {}
+    for period, start, end, default_limit, default_reserve in (
+        ("daily", day_start, day_start + timedelta(days=1), DEFAULT_DAILY_LIMIT, DEFAULT_CONFIRMATION_RESERVE_DAILY),
+        ("monthly", month_start, next_month, DEFAULT_MONTHLY_LIMIT, DEFAULT_CONFIRMATION_RESERVE_MONTHLY),
+    ):
+        quota = _limit(config, f"MAIL_{period.upper()}_LIMIT", default_limit)
+        reserve = min(quota, _limit(config, f"MAIL_CONFIRMATION_RESERVE_{period.upper()}", default_reserve))
+        row = conn.execute(
+            "SELECT COUNT(*) AS used,COALESCE(SUM(CASE WHEN detail='digest' THEN 1 ELSE 0 END),0) AS digest_used "
+            "FROM audit WHERE action='mail_reserved' AND created_at>=? AND created_at<?",
+            (_stamp(start), _stamp(end)),
+        ).fetchone()
+        result[period] = {"used": row["used"], "limit": quota, "confirmation_reserve": reserve,
+                          "digest_used": row["digest_used"], "digest_limit": max(0, quota - reserve),
+                          "resets_at": _stamp(end)}
+    return result
+
+
+def _reserve_quota(conn, item, config):
+    """Se llama dentro del bloqueo de correo, junto a la reserva del intento."""
+    instant = _now()
+    for quota in quota_status(conn, config, instant=instant).values():
+        if quota["used"] >= quota["limit"]:
+            return False
+        if item["kind"] == "digest" and quota["digest_used"] >= quota["digest_limit"]:
+            return False
+    conn.execute(
+        "INSERT INTO audit(actor,action,entity_id,detail,created_at) VALUES ('mailer','mail_reserved',?,?,?)",
+        (item["id"], item["kind"], _stamp(instant)),
+    )
+    return True
 
 
 @contextmanager
@@ -121,12 +199,25 @@ def queue_confirmation(conn, subscriber_id, base_url, secret_key):
         subscriber = conn.execute("SELECT * FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()
         if subscriber is None or subscriber["status"] != "pending":
             return _counts(skipped=1)
+        if is_suppressed(conn, subscriber["email"]):
+            conn.execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber_id,))
+            return _counts(skipped=1)
         previous = conn.execute(
             "SELECT * FROM outbox WHERE subscriber_id=? AND kind='confirmation' ORDER BY id DESC LIMIT 1",
             (subscriber_id,),
         ).fetchone()
-        if previous and previous["status"] in {"pending", "sent", "uncertain"}:
-            if _parse(previous["created_at"]) > instant - timedelta(seconds=CONFIRM_MAX_AGE):
+        # Una baja no confirma si un intento de red previo llegó o no. Antes de
+        # preparar otra confirmación, la incertidumbre exige conciliación humana.
+        if conn.execute(
+            "SELECT 1 FROM outbox WHERE subscriber_id=? AND kind='confirmation' AND status='uncertain' LIMIT 1",
+            (subscriber_id,),
+        ).fetchone():
+            return _counts(skipped=1)
+        if previous and previous["status"] in {"pending", "sent"}:
+            same_token = hmac.compare_digest(
+                previous["idempotency_key"].encode(), ("confirm-" + subscriber["token_hash"]).encode(),
+            )
+            if same_token and _parse(previous["created_at"]) > instant - timedelta(seconds=CONFIRM_MAX_AGE):
                 return _counts(skipped=1)
         # Un correo viejo nunca se reactiva porque alguien repita la tarea.
         conn.execute(
@@ -201,6 +292,10 @@ def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None):
                 "INSERT INTO settings(key,value) VALUES ('digest_cursor',?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(subscriber['id']),),
             )
+            if is_suppressed(conn, subscriber["email"]):
+                conn.execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber["id"],))
+                counters["skipped"] += 1
+                continue
             previous = conn.execute(
                 "SELECT created_at FROM outbox WHERE subscriber_id=? AND kind='digest' ORDER BY id DESC LIMIT 1",
                 (subscriber["id"],),
@@ -240,6 +335,9 @@ def _valid_delivery_config(config):
     address = parseaddr(sender)[1]
     if "\r" in sender or "\n" in sender or "@" not in address or "." not in address.rsplit("@", 1)[1]:
         return False
+    sender_domain = address.rsplit("@", 1)[1].lower()
+    if sender_domain == "resend.dev" or sender_domain.endswith((".resend.dev", ".test", ".invalid", ".example", ".localhost", ".local")) or sender_domain in {"example.com", "example.org", "example.net"}:
+        return False
     try:
         parsed = urlsplit(_base_url(config.get("PUBLIC_BASE_URL")))
         host = (parsed.hostname or "").lower()
@@ -268,6 +366,10 @@ def _prepare_delivery(conn, item, config):
     subscriber = conn.execute("SELECT * FROM subscribers WHERE id=?", (item["subscriber_id"],)).fetchone()
     if subscriber is None or subscriber["email"] != item["recipient"]:
         _cancel(conn, item["id"], "La suscripción cambió o ya no existe.")
+        return None
+    if is_suppressed(conn, subscriber["email"]):
+        conn.execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber["id"],))
+        _cancel(conn, item["id"], "Dirección suprimida por el proveedor; requiere revisión.")
         return None
     if item["kind"] == "confirmation":
         if subscriber["status"] != "pending" or _parse(item["created_at"]) + timedelta(seconds=CONFIRM_MAX_AGE) <= _now():
@@ -335,7 +437,8 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
         raise ValueError("Confirmá la transacción antes de procesar correos.")
     limit = max(1, min(int(limit if limit is not None else config.get('TASK_MAIL_BATCH', 10)), 100))
     pending_ids = [row[0] for row in conn.execute(
-        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY id LIMIT ?",
+        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) "
+        "ORDER BY CASE WHEN kind='confirmation' THEN 0 ELSE 1 END,id LIMIT ?",
         (_stamp(), limit),
     )]
     for outbox_id in pending_ids:
@@ -360,6 +463,10 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
             body = _prepare_delivery(conn, item, config)
             if body is None:
                 counters["skipped"] += 1
+                continue
+            if not _reserve_quota(conn, item, config):
+                counters["skipped"] += 1
+                counters["quota_reached"] = True
                 continue
             stamp = _stamp()
             conn.execute(

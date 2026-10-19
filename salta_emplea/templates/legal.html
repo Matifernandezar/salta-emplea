@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<article class="container section-space prose">
+  <h1>{{ title }}</h1>
+  {% if not legal_identity.complete %}
+  <div class="notice notice-error" role="status">
+    <strong>Información preliminar.</strong> Falta completar la identificación del responsable o su contacto antes del lanzamiento. Este texto no es una certificación legal.
+  </div>
+  {% endif %}
+  <section class="offer-section">
+    <h2>Responsable y contacto</h2>
+    <p>Responsable: {{ legal_identity.name or 'Pendiente de informar' }}.</p>
+    <p>Contacto para consultas, correcciones, retiro y privacidad:
+      {% if legal_identity.email %}<a href="{{ legal_identity.mailto }}">{{ legal_identity.email }}</a>{% else %}Pendiente de informar{% endif %}.</p>
+    <p>Podés reportar un aviso desde “Reportar un problema” en su página. No incluyas documentos de identidad, claves ni datos sensibles.</p>
+  </section>
+  {% if document == 'privacy' %}
+  <section class="offer-section">
+    <h2>Qué datos usamos y para qué</h2>
+    <p>No solicitamos cuentas públicas ni almacenamos CV. La postulación ocurre por el canal externo indicado en cada aviso.</p>
+    <p>Los aportes pueden contener enlaces, texto e imágenes. Se conservan el original, su procedencia y los cambios para revisar y moderar el aviso. Los reportes guardan el motivo, el detalle y el correo opcional para gestionar correcciones o solicitudes de retiro.</p>
+    <p>Si solicitás alertas y el correo está habilitado, guardamos tu dirección, preferencias, frecuencia y estado de consentimiento. La suscripción requiere confirmar el correo. Cada resumen incluye una baja que desactiva los próximos envíos; la baja no equivale a eliminar todos los registros históricos.</p>
+    <p>Usamos una cookie de sesión para proteger formularios y mantener el acceso del administrador. Para limitar abuso almacenamos una huella protegida de la dirección de red, conteos y vencimientos. Los registros operativos y de envíos ayudan a investigar fallos y evitar duplicados.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Imágenes y extracción de texto</h2>
+    <p>Las imágenes originales se consultan en el panel privado. No se publican junto con la oferta. Se convierten a una copia de revisión que elimina los metadatos del archivo.</p>
+    {% if ocr_paused %}<p>La lectura mediante Google Cloud Vision está en pausa en esta configuración. No se envían imágenes nuevas a ese servicio desde la aplicación.</p>{% else %}<p>La lectura mediante Google Cloud Vision requiere autorización para esa imagen y puede enviar una copia a Google para extraer el texto. Este procesamiento no publica ni aprueba el aviso.</p>{% endif %}
+    <p>Autorizar una extracción no autoriza la publicación o reutilización pública de la imagen. Compartí únicamente material que tengas permiso de aportar.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Proveedores y enlaces externos</h2>
+    <p>El alojamiento utiliza Vercel y la base de datos de producción utiliza Neon PostgreSQL. El código y la automatización de desarrollo se alojan en GitHub. El envío de alertas está preparado para Resend y depende de su configuración. Los proveedores pueden procesar datos fuera de Argentina según sus servicios y condiciones.</p>
+    <p>Las imágenes externas de anuncios pueden comunicar tu dirección de red y datos técnicos al servidor del anunciante al cargarse. Los enlaces de postulación y de redes llevan a servicios externos con sus propias políticas. No enviamos tu suscripción al empleador.</p>
+    <p>Podés consultar las políticas de <a href="https://vercel.com/legal/privacy-policy" rel="noopener noreferrer" target="_blank">Vercel</a>, <a href="https://neon.com/privacy-policy" rel="noopener noreferrer" target="_blank">Neon</a>, <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener noreferrer" target="_blank">GitHub</a>, <a href="https://resend.com/legal/privacy-policy" rel="noopener noreferrer" target="_blank">Resend</a> y <a href="https://cloud.google.com/terms/cloud-privacy-notice" rel="noopener noreferrer" target="_blank">Google Cloud</a>.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Conservación, corrección y eliminación</h2>
+    <p>Los avisos cerrados dejan de aparecer en la búsqueda pública, pero el archivo editorial, los reportes y los registros de operación pueden permanecer para revisar procedencia, resolver reclamos y evitar duplicados.</p>
+    <p>No hay todavía una política automática completa de eliminación por antigüedad. El responsable debe completar los plazos y el procedimiento de atención antes del lanzamiento. Las copias de respaldo, si se generan, pueden conservar información durante su retención y requieren protección equivalente.</p>
+    <p>{% if legal_identity.email %}Para solicitar acceso, corrección o eliminación, escribí al correo de contacto e indicá qué registro o aviso corresponde.{% else %}El canal general para ejercer estos derechos está pendiente de configuración. Para un aviso disponible podés usar su formulario de reporte.{% endif %} La revisión puede requerir comprobar que la solicitud corresponde a tus datos; no envíes documentación sensible sin que se indique un canal adecuado.</p>
+  </section>
+  {% else %}
+  <section class="offer-section">
+    <h2>Alcance del servicio</h2>
+    <p>Salta Emplea es un nombre provisional. Centraliza avisos de terceros para Salta y oportunidades remotas compatibles con residir en la provincia. El servicio inicial es gratuito para candidatos y empleadores. No garantiza contratación, disponibilidad permanente de los avisos ni cobertura total de fuentes.</p>
+    <p>No se ofrecen perfiles de candidatos, almacenamiento de CV ni pagos dentro de la aplicación. No hay una verificación empresarial que habilite una etiqueta de “empresa verificada”.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Aportes, revisión y postulación</h2>
+    <p>Compartí solo contenido que puedas aportar legítimamente. Los avisos se revisan antes de publicarse y pueden rechazarse, corregirse, archivarse o retirarse. La fecha de incorporación no reemplaza la fecha original. Los datos no presentes en la fuente se muestran como “No informado”.</p>
+    <p>La postulación se realiza directamente con el responsable del aviso mediante el enlace, correo o WhatsApp indicado. Revisá la fuente, las condiciones y la compatibilidad de residencia y horarios. Nunca pagues para postularte ni compartas claves o códigos.</p>
+    <p>Si un aviso contiene errores, está cerrado o debe retirarse, usá el reporte de su página o el contacto indicado. Una solicitud de retiro se revisa; el envío del formulario no altera automáticamente un aviso aprobado.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Alertas, difusión y publicidad</h2>
+    <p>Las alertas requieren suscripción voluntaria y confirmación; la entrega depende de la configuración del correo y las cuotas disponibles. Podés darte de baja desde cada resumen.</p>
+    <p>Los enlaces para compartir abren el canal elegido. La aplicación no envía por su cuenta mensajes a tus contactos ni grupos. Los espacios comerciales se identifican como “Publicidad” y se administran por separado de las ofertas.</p>
+  </section>
+  <section class="offer-section">
+    <h2>Disponibilidad y cambios</h2>
+    <p>El servicio puede interrumpirse por mantenimiento o problemas de sus proveedores. Los cambios de estas condiciones deben reflejar el funcionamiento real y no amplían por sí solos el consentimiento para enviar correos o reutilizar imágenes.</p>
+    <p>Consultá también la <a href="{{ url_for('privacy') }}">información de privacidad</a>. Este texto requiere completar los datos del responsable y una revisión adecuada antes del lanzamiento.</p>
+  </section>
+  {% endif %}
+</article>
+{% endblock %}
