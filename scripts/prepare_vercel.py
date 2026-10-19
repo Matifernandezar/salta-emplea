@@ -1,12 +1,13 @@
 """Preparar estáticos y migraciones explícitas del despliegue, sin importar WSGI."""
 import os
+import json
 import shutil
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from salta_emplea import db, source_setup
+from salta_emplea import db, operations, source_setup
 
 
 def main():
@@ -24,6 +25,8 @@ def main():
     try:
         result = source_setup.configure_authorized_source(conn, os.environ)
         print('Registro de fuente autorizada: ' + result['status'])
+        if os.environ.get('VERCEL_ENV') == 'production' and os.environ.get('ENABLE_JOBICY_SOURCE') == '1':
+            print('SALTA_SOURCE_CHECK ' + json.dumps(operations.source_collection_summary(conn), sort_keys=True))
     finally:
         conn.close()
     print('Estáticos preparados y migraciones PostgreSQL aplicadas; sin datos de prueba.')

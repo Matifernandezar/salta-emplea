@@ -47,6 +47,8 @@ La preparación de producción incorpora cuotas diarias/mensuales y reserva de c
 
 El panel Automatización también muestra antigüedad de corridas, llamadas autenticadas por tarea y cola pendiente. Este diagnóstico no certifica el origen de las llamadas ni instala un programador o monitoreo externo. Los backups PostgreSQL se operan con los comandos de RESPALDOS.md; `retention-preview` no escribe y `retention-apply --confirm-deletion` requiere revisar una limpieza concreta. No se hicieron borrados de producción ni se eliminan imágenes con esa herramienta.
 
+La configuración diaria del despliegue consulta la fuente a las 18:20 UTC y comprueba vigencia/correo a las 18:30/18:50 (15:20, 15:30 y 15:50 en Salta). En Hobby los horarios son aproximados y los lotes no dependen de ese orden. Comprobar la primera ejecución; no basta con el archivo de configuración. Los logs `SALTA_TASK` contienen solo contadores de una lista cerrada. `SALTA_SOURCE_CHECK` en un build lee el último resultado guardado, no consulta al proveedor ni prueba por sí solo el origen automático de esa corrida.
+
 WhatsApp y redes ofrecen texto/enlace manual solo para ofertas aprobadas y activas. Habilitar o deshabilitar cada preparación desde Configuración. Eso no activa una publicación automática. Publicar exclusivamente en canales propios y autorizados. Los adaptadores oficiales futuros, sus permisos y costos están pendientes en `COSTOS.md`.
 
 ## Publicidad

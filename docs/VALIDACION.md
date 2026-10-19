@@ -8,7 +8,9 @@ Se preparó el registro declarativo de Jobicy solo en producción, con autorizac
 
 El contacto público admite un perfil HTTPS de LinkedIn de una lista cerrada, sin inferirlo del nombre ni publicar consultas o tokens. No se exige publicar un correo personal; las alertas requieren un remitente verificado independiente. Los datos del responsable y la habilitación de Jobicy se guardaron como configuración de Production, sin leer secretos.
 
-Suite local de esta ampliación: **716 aprobadas y 14 omitidas por falta de PostgreSQL de pruebas**. Los resultados de PostgreSQL/Chromium y del despliegue se registrarán al finalizar. Un cron declarado no demuestra una consulta real ni entrega de correo.
+Suite local de esta ampliación: **716 aprobadas y 14 omitidas por falta de PostgreSQL de pruebas**. La [CI PostgreSQL 17](https://github.com/Matifernandezar/salta-emplea/actions/runs/39301369150), commit `e180353`, pasó **730 sin omisiones en 26,07 segundos**, incluidos dos despliegues concurrentes y conservación de una pausa. [Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39301369213) pasó los circuitos editorial, imágenes sustituidas, helper y producción de solo lectura en ambos tamaños.
+
+El despliegue `dpl_5zdDSLhjwyYak68vktfy6F8PumJk` terminó READY y el build confirmó `Registro de fuente autorizada: created`. La fuente quedó registrada; eso todavía no demuestra una consulta real del cron. Se agrega registro estructurado de contadores después de cada cron autenticado y comprobación de la última recopilación persistida durante el build, sin realizar consultas a Jobicy desde el build ni exponer avisos/contactos. El resultado observado se registrará después del siguiente despliegue. Una respuesta del cron no demuestra recepción de correo.
 
 ## Preparación de lanzamiento y recuperación — 19/10/2026
 

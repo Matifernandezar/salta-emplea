@@ -25,6 +25,8 @@ from .config import load_env
 def create_app(config=None):
     load_env()
     app = Flask(__name__, instance_relative_config=True)
+    # Solo se registran mensajes propios y contadores de una lista cerrada.
+    app.logger.setLevel(logging.INFO)
     app.config.from_mapping(
         SECRET_KEY=os.environ.get('SECRET_KEY'),
         ADMIN_PASSWORD_HASH=os.environ.get('ADMIN_PASSWORD_HASH', ''),
@@ -799,6 +801,7 @@ def create_app(config=None):
                                  ('programador', 'cron_recibido', task, domain.now()))
         from .tasks import run_tasks
         result = run_tasks(connection(), app.config, only=task)
+        app.logger.info('SALTA_TASK %s', json.dumps(operations.task_summary(task, result), sort_keys=True))
         response = app.json.response(result)
         response.headers['Cache-Control'] = 'no-store'
         return response

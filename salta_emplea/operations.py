@@ -5,11 +5,73 @@ no infiere programación instalada, entrega de correo ni respaldos de producció
 """
 
 from datetime import datetime, timezone
+import json
 
 from . import db
 
 
 _TASKS = {"collect": "Recopilación", "expire": "Vigencia", "mail": "Correo"}
+
+
+def task_summary(task, result):
+    """Contadores cerrados para logs, sin textos, contactos o errores externos.
+
+    Un lote terminado no implica éxito del proveedor ni entrega al destinatario.
+    Los detalles y el estado definitivo se conservan en el panel privado.
+    """
+    if task not in ('collect', 'expire', 'mail', 'extract') or not isinstance(result, dict):
+        raise ValueError('Resultado operativo no válido.')
+    summary = {'task': task, 'skipped': 'skipped' in result,
+               'budget_exhausted': result.get('budget_exhausted') is True}
+    sources = result.get('sources')
+    if isinstance(sources, list):
+        rows = [item for item in sources[:10] if isinstance(item, dict)]
+        summary['sources_with_result'] = len(rows)
+        for key in ('received', 'eligible', 'created', 'duplicates', 'invalid'):
+            summary[key] = sum(item[key] for item in rows
+                               if type(item.get(key)) is int and 0 <= item[key] <= 1_000_000)
+    for section in ('expiration', 'queue', 'mail', 'images'):
+        value = result.get(section)
+        if isinstance(value, dict):
+            counters = {key: value[key] for key in ('expired', 'review_requested', 'queued', 'sent',
+                        'skipped', 'errors', 'processed', 'prepared')
+                        if type(value.get(key)) is int and 0 <= value[key] <= 1_000_000}
+            if counters:
+                summary[section] = counters
+    return summary
+
+
+def source_collection_summary(conn, *, now=None):
+    """Último resultado persistente de Jobicy, sin avisos ni mensajes externos.
+
+    Se usa al desplegar para comprobar datos previos, no para consultar la API.
+    Un resultado registrado no identifica por sí solo quién inició la corrida.
+    """
+    instant = now or datetime.now(timezone.utc)
+    row = conn.execute(
+        "SELECT status,authorized,last_run_at,last_result FROM sources "
+        "WHERE method='jobicy' AND url=? ORDER BY id LIMIT 1",
+        ('https://jobicy.com/api/v2/remote-jobs',),
+    ).fetchone()
+    if not row:
+        return {'state': 'not_configured'}
+    result = {'state': 'waiting', 'active': row['status'] == 'active' and row['authorized'] == 1}
+    if row['last_run_at'] is None:
+        return result
+    stamp = _timestamp(row['last_run_at'], instant)
+    result.update(state='requires_review', last_run_at=stamp)
+    raw = row['last_result']
+    if not stamp or not isinstance(raw, str) or len(raw) > 20_000:
+        return result
+    try:
+        counters = json.loads(raw)
+    except (ValueError, RecursionError):
+        return result
+    keys = ('received', 'eligible', 'created', 'duplicates', 'invalid')
+    if not isinstance(counters, dict) or not all(type(counters.get(k)) is int and 0 <= counters[k] <= 1_000_000 for k in keys):
+        return result
+    result.update(state='recorded', counts={k: counters[k] for k in keys})
+    return result
 _RUN_STATUSES = frozenset({"running", "succeeded", "partial", "failed", "interrupted"})
 _MAIL_STATUSES = ("pending", "uncertain", "sent", "failed", "cancelled")
 _STATE_LABELS = {
