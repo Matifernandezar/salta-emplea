@@ -24,7 +24,7 @@ La contraseña del titular no se conoce ni se recupera desde Vercel. El ingreso 
 
 ## Qué está habilitado
 
-Buscador y filtros, aporte de enlace/texto/imagen pendiente, panel privado, revisión/aprobación/archivo/vencimiento, registro de fuentes, publicidad y botones de ejecución manual. Las imágenes privadas se guardan en PostgreSQL; no se depende del disco efímero de una función. El build copia el CSS a `public/static` y aplica migraciones idempotentes, sin sembrar ofertas, fuentes ni suscriptores.
+Buscador y filtros, aporte de enlace/texto/imagen pendiente, panel privado, revisión/aprobación/archivo/vencimiento, registro de fuentes, publicidad y botones de ejecución manual. Las imágenes privadas se guardan en PostgreSQL; no se depende del disco efímero de una función. El build copia el CSS a `public/static` y aplica migraciones idempotentes, sin ofertas ni suscriptores de prueba. Con autorización explícita registra una sola vez Jobicy; no consulta ofertas durante el build ni reactiva pausas posteriores.
 
 La base inicial está vacía. No se aprobaron ofertas automáticamente ni se cargaron ejemplos en producción. La primera oferta se incorpora desde el panel o `/publicar`, se revisa contra el original y solo entonces el titular elige **Aprobar y publicar**.
 
