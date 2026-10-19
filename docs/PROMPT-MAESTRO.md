@@ -23,7 +23,7 @@ Sin perfiles de candidatos, cuentas públicas, almacenamiento de CV, cobros ni p
 - Panel: https://saltaemplea.com/admin
 - Stack: Flask, HTML renderizado en servidor, PostgreSQL en Neon, Vercel y GitHub Actions.
 - El backend y la conexión SQL ya se verificaron en producción. Buscador, filtros, aportes, panel, aprobación y tareas manuales están implementados.
-- La última validación previa al dominio registra 733 pruebas con PostgreSQL y un circuito en Chromium móvil/escritorio. Revisá los resultados actuales: ese registro histórico no prueba el estado de hoy.
+- La última validación documentada registra 763 pruebas con PostgreSQL y un circuito en Chromium móvil/escritorio. Revisá los resultados actuales: ese registro histórico no prueba el estado de hoy.
 - Jobicy está autorizado, activo y completó una primera recopilación real en producción el 19/10/2026: 100 recibidos y cinco incorporados pendientes. Eso no demuestra elegibilidad definitiva de cada oferta.
 - Instagram @empleosalta12 pertenece a un tercero. Instagram, Computrabajo y LinkedIn no tienen acceso automático autorizado verificado.
 - Hay programación diaria en Vercel y resultado persistido de la primera recopilación; la entrega real de alertas sigue sin verificar. La difusión disponible es manual.

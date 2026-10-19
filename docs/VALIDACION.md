@@ -1,5 +1,15 @@
 # Resultado por fase
 
+## Dominio propio y contacto público — 19/10/2026
+
+El titular confirmó la compra de **saltaemplea.com** y proporcionó su perfil exacto de LinkedIn. Vercel lo muestra asociado a `salta-emplea`, `verified=true`, con DNS sin conflictos ni configuración incorrecta. HTTPS `/salud` respondió 200 con consulta SQL correcta. Se actualizaron únicamente las variables públicas de Production, sin leer secretos; el remitente de correo sigue sin configurar. El perfil conserva la tilde mediante UTF-8, sin transliteración ni parámetros de seguimiento.
+
+El commit `606e72b`, despliegue `dpl_5Waf1B8sxbZYhH7pKg9ZfBf1tZjz`, terminó READY. Se comprobaron HTTP 200 para portada, privacidad, condiciones, sitemap, robots, alertas y salud en el dominio propio. Las páginas legales muestran Matías Fernández y el enlace suministrado; canónicas, sitemap y robots apuntan a `https://saltaemplea.com`. El alias Vercel anterior sigue conectado. Las alertas mantienen aviso de configuración pendiente y botón deshabilitado: no se registraron suscripciones ni se enviaron mensajes en esta fase.
+
+Pasaron **187 pruebas locales** de contacto, correo y webhooks. La [CI de PostgreSQL 17](https://github.com/Matifernandezar/salta-emplea/actions/runs/39337465312) pasó **763 pruebas**, sin omisiones, en 27,47 s. [Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39337465300) pasó 390 × 844 y 1440 × 1000, incluido el dominio nuevo de solo lectura: SQL, buscador/filtros, páginas públicas, administración protegida y cron sin credencial rechazado. El circuito editorial y las imágenes se prueban en bases aisladas, con OCR sustituido; no acredita OCR de Google, aprobación real del titular ni entrega de correo.
+
+El titular indicó que todavía no creó cuenta Resend. Se entregaron pasos de creación Free y preparación DNS en CORREO.md. Continúan pendientes verificación del dominio remitente, credenciales privadas, webhook y prueba autorizada de confirmación/resumen/baja con recepción; también el destino y programación del respaldo externo de producción. No se contrataron planes, realizaron nuevas llamadas a Google ni aprobaron ofertas en nombre del titular. Los apartados siguientes son registros históricos de fases anteriores, no el inventario actual.
+
 ## Primera recopilación real en producción — 19/10/2026
 
 El build de `41cdc10`, despliegue `dpl_ShBqVE1DyJZEi6AVwZWrpGmQjUDB` READY, leyó el resultado persistido de Jobicy mediante `SALTA_SOURCE_CHECK`: fuente activa, última corrida **2026-10-19T18:51:01+00:00**, 100 recibidos, cinco elegibles, **cinco incorporados**, cero duplicados y cero inválidos. El build solo consultó ese registro: no descargó avisos ni ejecutó recopilación. La programación diaria está en el despliegue; el horario observado cae dentro de la ventana aproximada de Hobby. Los avisos se incorporan pendientes mediante el circuito editorial probado; no se aprobó ninguno en nombre del titular.

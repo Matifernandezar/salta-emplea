@@ -55,6 +55,6 @@ Ejemplo de volumen, no audiencia existente: 1.000 suscriptores semanales generan
 
 ## Dominio y nombre
 
-Salta Emplea es provisional. Disponibilidad y aranceles de registro/renovación en [NIC Argentina](https://nic.ar/) y antecedentes en [INPI](https://www.argentina.gob.ar/inpi) siguen pendientes. Un sitio vacío o una referencia DNS no acreditan disponibilidad. Dominio, impuestos y asesoramiento de marca no están incluidos en los totales.
+Salta Emplea es un nombre provisional. El titular confirmó la compra de saltaemplea.com y su DNS/HTTPS se verificaron el 19/10; no se realizó una compra por herramientas ni se informó el importe realmente pagado. Revisar precio y fecha de renovación en el registrador del titular. Los antecedentes de marca en [INPI](https://www.argentina.gob.ar/inpi) y disponibilidad de variantes en [NIC Argentina](https://nic.ar/) no se comprobaron. Dominio, impuestos y asesoramiento de marca no están incluidos en los totales.
 
 Los precios del servidor propio son antecedentes y no deben sumarse a Vercel ni presentarse como cotización actual. La arquitectura activa y el presupuesto elegido se describen al principio de este documento.

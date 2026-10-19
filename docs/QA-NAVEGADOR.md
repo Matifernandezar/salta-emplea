@@ -6,8 +6,8 @@ preinstalado del runner e informa su versión en el registro. Los cambios releva
 de la aplicación lo activan en `push` y `pull_request`; también admite ejecución
 manual desde GitHub Actions.
 
-**Ejecución verificada: 18/10/2026.** El [workflow real](https://github.com/Matifernandezar/salta-emplea/actions/runs/39106820499)
-terminó correctamente con el commit `a3b925c`. Completó el circuito local en
+**Ejecución verificada: 19/10/2026.** El [workflow real](https://github.com/Matifernandezar/salta-emplea/actions/runs/39337465300)
+terminó correctamente con el commit `606e72b`, usando https://saltaemplea.com como origen público. Completó el circuito local en
 390 × 844 y 1440 × 1000 y verificó el backend público con PostgreSQL, filtros y
 permisos y cuatro cron denegados, sin escribir datos en producción ni detectar desborde horizontal. También pasó el circuito de imágenes con proveedor sustituido explicado abajo. Las capturas
 públicas están en el artefacto de esa corrida. Su inspección visual manual y las
