@@ -1,5 +1,11 @@
 # Resultado por fase
 
+## Primera recopilación real en producción — 19/10/2026
+
+El build de `41cdc10`, despliegue `dpl_ShBqVE1DyJZEi6AVwZWrpGmQjUDB` READY, leyó el resultado persistido de Jobicy mediante `SALTA_SOURCE_CHECK`: fuente activa, última corrida **2026-10-19T18:51:01+00:00**, 100 recibidos, cinco elegibles, **cinco incorporados**, cero duplicados y cero inválidos. El build solo consultó ese registro: no descargó avisos ni ejecutó recopilación. La programación diaria está en el despliegue; el horario observado cae dentro de la ventana aproximada de Hobby. Los avisos se incorporan pendientes mediante el circuito editorial probado; no se aprobó ninguno en nombre del titular.
+
+Esto verifica acceso real desde la aplicación de producción y persistencia de una primera incorporación. No demuestra cobertura total, elegibilidad definitiva de cada puesto ni entrega de correo. La idempotencia y concurrencia se verificaron en las pruebas documentadas; no se hizo una segunda consulta real para forzar duplicados o eludir la frecuencia de la fuente. Permanecen pendientes dominio/DNS, perfil exacto de LinkedIn, remitente/proveedor y prueba autorizada de recepción y baja.
+
 ## Fuente autorizada y contacto del responsable — 19/10/2026
 
 El titular autorizó Jobicy como primera fuente, indicó su nombre público Matías Fernández, descartó teléfono público y eligió LinkedIn como contacto, con URL todavía pendiente. Eligió saltaemplea.com y anunció su compra: una consulta de registro lo encontró disponible, con precio Vercel USD 11,25 por un año y renovación USD 11,25 antes de impuestos, sin reservar ni comprarlo. Propiedad, DNS y HTTPS siguen sin verificar; se conserva el origen Vercel activo.
