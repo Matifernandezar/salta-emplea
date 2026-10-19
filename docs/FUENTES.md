@@ -1,6 +1,6 @@
 # Fuentes y nombre provisional
 
-Consulta inicial: **16 de octubre de 2026, UTC**. El **19/10/2026** se volvió a consultar la documentación oficial de Jobicy: conserva el acceso público, reutilización con atribución y enlace canónico y máximo de una sincronización nueva por hora. No se hizo una nueva consulta a sus avisos ni se habilitó producción; la aceptación de esta fuente por el titular sigue pendiente. El resto del documento conserva su fecha y alcance originales. No se contactó a ninguna organización.
+Consulta inicial: **16 de octubre de 2026, UTC**. El **19/10/2026** se volvió a consultar la documentación oficial de Jobicy: conserva el acceso público, reutilización con atribución y enlace canónico y máximo de una sincronización nueva por hora. El titular autorizó Jobicy como primera fuente ese día. El registro declarativo de producción usa `ENABLE_JOBICY_SOURCE` y un marcador persistente: crea una fuente autorizada una sola vez y no reactiva pausas ni sobrescribe referencias existentes. El build no consulta ofertas; la primera consulta programada debe comprobarse por separado. El resto del documento conserva su fecha y alcance originales. No se contactó a ninguna organización.
 
 ## Primera API candidata: Jobicy
 

@@ -12,7 +12,8 @@
     <h2>Responsable y contacto</h2>
     <p>Responsable: {{ legal_identity.name or 'Pendiente de informar' }}.</p>
     <p>Contacto para consultas, correcciones, retiro y privacidad:
-      {% if legal_identity.email %}<a href="{{ legal_identity.mailto }}">{{ legal_identity.email }}</a>{% else %}Pendiente de informar{% endif %}.</p>
+      {% if legal_identity.email %}<a href="{{ legal_identity.mailto }}">{{ legal_identity.email }}</a>{% endif %}{% if legal_identity.email and legal_identity.url %} o {% endif %}{% if legal_identity.url %}<a href="{{ legal_identity.url }}" rel="noopener noreferrer" target="_blank">Perfil de LinkedIn del responsable</a>{% endif %}{% if not legal_identity.email and not legal_identity.url %}Pendiente de informar{% endif %}.</p>
+    {% if legal_identity.url %}<p>LinkedIn es un servicio externo y puede requerir una cuenta para contactar al responsable.</p>{% endif %}
     <p>Podés reportar un aviso desde “Reportar un problema” en su página. No incluyas documentos de identidad, claves ni datos sensibles.</p>
   </section>
   {% if document == 'privacy' %}
@@ -39,7 +40,7 @@
     <h2>Conservación, corrección y eliminación</h2>
     <p>Los avisos cerrados dejan de aparecer en la búsqueda pública, pero el archivo editorial, los reportes y los registros de operación pueden permanecer para revisar procedencia, resolver reclamos y evitar duplicados.</p>
     <p>No hay todavía una política automática completa de eliminación por antigüedad. El responsable debe completar los plazos y el procedimiento de atención antes del lanzamiento. Las copias de respaldo, si se generan, pueden conservar información durante su retención y requieren protección equivalente.</p>
-    <p>{% if legal_identity.email %}Para solicitar acceso, corrección o eliminación, escribí al correo de contacto e indicá qué registro o aviso corresponde.{% else %}El canal general para ejercer estos derechos está pendiente de configuración. Para un aviso disponible podés usar su formulario de reporte.{% endif %} La revisión puede requerir comprobar que la solicitud corresponde a tus datos; no envíes documentación sensible sin que se indique un canal adecuado.</p>
+    <p>{% if legal_identity.email %}Para solicitar acceso, corrección o eliminación, escribí al correo de contacto e indicá qué registro o aviso corresponde.{% elif legal_identity.url %}Para solicitar acceso, corrección o eliminación, contactá al responsable por su perfil de LinkedIn e indicá qué registro o aviso corresponde. Para un aviso disponible también podés usar su formulario de reporte.{% else %}El canal general para ejercer estos derechos está pendiente de configuración. Para un aviso disponible podés usar su formulario de reporte.{% endif %} La revisión puede requerir comprobar que la solicitud corresponde a tus datos; no envíes documentación sensible sin que se indique un canal adecuado.</p>
   </section>
   {% else %}
   <section class="offer-section">

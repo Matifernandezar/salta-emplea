@@ -10,7 +10,7 @@ Actualización: 19/10/2026. [Salta Emplea](https://salta-emplea.vercel.app) ejec
 - Build Command: `python scripts/prepare_vercel.py`; sin directorio de salida personalizado.
 - `.python-version`: Python 3.12. `wsgi.py` exporta la aplicación.
 - URL pública: https://salta-emplea.vercel.app. Panel: `/admin/ingresar`.
-- `vercel.json` no programa tareas. `deploy/vercel-programado.json` es una propuesta pendiente de habilitación y validación de plan/costos.
+- `vercel.json` prepara tres tareas diarias, compatibles técnicamente con la frecuencia diaria de Hobby y Pro: recopilación 18:20 UTC, vigencia 18:30 y correo 18:50 (15:20, 15:30 y 15:50 en Salta). Hobby puede ejecutarlas dentro de una ventana horaria; no se depende de su orden. No son prueba de ejecución hasta observar el programador. `deploy/vercel-programado.json` conserva la alternativa más frecuente, sin instalar ni contratar Pro.
 
 El despliegue inicial del backend `dpl_BoajdyPMNqsY8WbxhcNuMypSrB3w`, commit `35ef8f2`, terminó READY. El registro de build confirmó migraciones PostgreSQL aplicadas sin datos de prueba. Una petición real a `/salud` devolvió HTTP 200 y `{"status":"ok"}`, que implica una consulta SQL correcta. Portada, aportes, alertas e ingreso respondieron HTTP 200; cron sin credencial respondió 401. Los resultados posteriores de navegador se registran en VALIDACION.md.
 
@@ -30,9 +30,9 @@ La base inicial está vacía. No se aprobaron ofertas automáticamente ni se car
 
 ## Integraciones pendientes
 
-- Fuentes: ninguna habilitada en producción. Revisar acceso y condiciones, registrar evidencia y autorizar antes de recopilar. La comprobación real aislada de Jobicy no concede esa autorización.
+- Fuente Jobicy: autorización recibida del titular el 19/10. El build aplica una sola vez el registro mediante `ENABLE_JOBICY_SOURCE=1` y `VERCEL_ENV=production`, con atribución y fecha de revisión de condiciones. Una referencia existente se conserva para revisión; un despliegue nunca reactiva una fuente pausada. No importa avisos durante el build. Comprobar el resultado de registro y luego la primera consulta real del programador.
 - Correo: faltan proveedor y remitente. Sin ellos, `/alertas` informa que no registra direcciones. Probar consentimiento, recepción, resumen y baja con una dirección propia antes de abrir suscripciones.
-- Tareas programadas: no instaladas. Usar `/admin/automatizacion` para lotes manuales. Los endpoints cron exigen Authorization Bearer `CRON_SECRET`; la existencia de la clave no demuestra programación. Verificar plan y precios antes de habilitar el archivo opcional.
+- Tareas: programación diaria preparada en el archivo principal. Al desplegar, comprobar que Vercel la instala y observar una ejecución iniciada por la plataforma antes de afirmar su circuito real. El panel admite lotes manuales. Cron exige Authorization Bearer `CRON_SECRET`, que Vercel inyecta sin exponer la clave. No se cambian planes ni se activa correo sin proveedor.
 - WhatsApp y redes: textos y enlaces manuales para ofertas aprobadas. No hay proveedores automáticos ni cuentas conectadas.
 - Lectura de imágenes: pausada el 19/10 mediante `OCR_ENABLED=0` y redespliegue `dpl_GYfrnTXaXnMzDA7hiN355ioWB84C`, READY. `/publicar` ya no ofrece envío a Google; no se hicieron nuevas llamadas ni se retiró la clave, el cupo o el historial. No hay lectura real exitosa. Ver LECTURA-DE-IMAGENES.md y OCR-SIN-API.md.
 - Operación: completar responsable/contacto en privacidad y condiciones, confirmar marca/dominio y comprobar restauración de backups en otra base. No se contrató ni cambió ningún plan.
@@ -45,6 +45,6 @@ Las migraciones de `scripts/prepare_vercel.py` se ejecutan explícitamente duran
 
 Los comandos `backup-postgres`, `verify-backup` y `restore-postgres-isolated` operan fuera de HTTP; requieren cliente 17 y configuración privada independiente para el destino de ensayo. Ver RESPALDOS.md. No se instaló un destino externo ni un cron de respaldo de producción. La retención tiene vista previa y aplicación explícita: no se activa con un despliegue.
 
-Variables nuevas por nombre: `PUBLIC_RESPONSIBLE_NAME`, `PUBLIC_CONTACT_EMAIL`, `RESEND_WEBHOOK_SECRET`, `MAIL_DAILY_LIMIT`, `MAIL_MONTHLY_LIMIT`, `MAIL_CONFIRMATION_RESERVE_DAILY`, `MAIL_CONFIRMATION_RESERVE_MONTHLY`, los umbrales `OPERATIONS_*_MAX_AGE_HOURS` y límites `RETENTION_*` de `.env.example`. Identidad pública y dominio siguen pendientes del titular. No agregar `POSTGRES_RESTORE_URL` a la aplicación de producción: corresponde al entorno aislado de ensayo.
+Variables nuevas por nombre: `PUBLIC_RESPONSIBLE_NAME`, `PUBLIC_CONTACT_EMAIL`, `PUBLIC_CONTACT_URL`, `ENABLE_JOBICY_SOURCE`, `RESEND_WEBHOOK_SECRET`, `MAIL_DAILY_LIMIT`, `MAIL_MONTHLY_LIMIT`, `MAIL_CONFIRMATION_RESERVE_DAILY`, `MAIL_CONFIRMATION_RESERVE_MONTHLY`, los umbrales `OPERATIONS_*_MAX_AGE_HOURS` y límites `RETENTION_*` de `.env.example`. Responsable indicado: Matías Fernández, sin teléfono público; el perfil LinkedIn exacto sigue pendiente. No cambiar `PUBLIC_BASE_URL` a saltaemplea.com hasta comprobar propiedad, DNS y HTTPS. No agregar `POSTGRES_RESTORE_URL` a producción: corresponde al entorno aislado.
 
 La suite con PostgreSQL usa `POSTGRES_TEST_URL` y esquemas aleatorios que elimina al finalizar; jamás darle una conexión de producción. El navegador público usa solo consultas sin credenciales y no escribe ofertas ni envía correos. Los resultados y límites de cada comprobación están en VALIDACION.md.

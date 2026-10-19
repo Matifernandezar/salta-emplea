@@ -32,7 +32,7 @@ def app(tmp_path):
         'DATABASE_URL': '', 'DATABASE_PATH': str(tmp_path / 'publico.sqlite3'),
         'UPLOAD_DIR': str(tmp_path / 'privadas'),
         'PUBLIC_BASE_URL': 'https://empleos.example.org',
-        'PUBLIC_RESPONSIBLE_NAME': '', 'PUBLIC_CONTACT_EMAIL': '',
+        'PUBLIC_RESPONSIBLE_NAME': '', 'PUBLIC_CONTACT_EMAIL': '', 'PUBLIC_CONTACT_URL': '',
         'RESEND_API_KEY': '', 'MAIL_FROM': '', 'OCR_ENABLED': '0',
     })
 
@@ -171,6 +171,118 @@ def test_legal_identity_remains_pending_until_real_config_is_supplied(app):
 def test_invalid_contact_never_becomes_an_injected_mailto():
     for email in ('no-es-correo', 'test@example.org?subject=secreto', 'test@example.org\nBcc:otro@example.org'):
         assert not public_metadata.legal_identity({'PUBLIC_CONTACT_EMAIL': email})['email']
+
+
+@pytest.mark.parametrize(('value', 'normalized'), [
+    ('https://www.linkedin.com/in/perfil-ficticio-prueba', 'https://www.linkedin.com/in/perfil-ficticio-prueba'),
+    ('https://linkedin.com/in/perfil-ficticio-prueba/', 'https://linkedin.com/in/perfil-ficticio-prueba'),
+    ('https://WWW.LINKEDIN.COM:443/in/Perfil-Prueba-123/', 'https://www.linkedin.com/in/Perfil-Prueba-123'),
+])
+def test_public_contact_accepts_only_explicit_profile_and_normalizes_safe_url(value, normalized):
+    identity = public_metadata.legal_identity({
+        'PUBLIC_RESPONSIBLE_NAME': 'Responsable ficticio de prueba',
+        'PUBLIC_CONTACT_URL': value,
+    })
+    assert identity['url'] == normalized
+    assert identity['complete'] is True
+    assert identity['email'] == '' and identity['mailto'] is None
+
+
+@pytest.mark.parametrize('value', [
+    'http://www.linkedin.com/in/prueba', '//www.linkedin.com/in/prueba',
+    'javascript:alert(1)', 'https://evil.example/in/prueba',
+    'https://www.linkedin.com.evil.example/in/prueba',
+    'https://evil-linkedin.com/in/prueba', 'https://wwwlinkedin.com/in/prueba',
+    'https://es.linkedin.com/in/prueba', 'https://www.linkedin.com./in/prueba',
+    'https://www.linkedіn.com/in/prueba',  # i cirílica, no el dominio real
+    'https://www.linkedin。com/in/prueba', 'https://ｗｗｗ.linkedin.com/in/prueba',
+    'https://xn--linkedin-9jg.com/in/prueba',
+    'https://user:secret@www.linkedin.com/in/prueba',
+    'https://www.linkedin.com@evil.example/in/prueba',
+    'https://@www.linkedin.com/in/prueba',
+    'https://www.linkedin.com:8443/in/prueba', 'https://www.linkedin.com:99999/in/prueba',
+    'https://www.linkedin.com:/in/prueba', 'https://www.linkedin.com:0443/in/prueba',
+    'https://www.linkedin.com/in/prueba?token=secreto-no-publicar',
+    'https://www.linkedin.com/in/prueba#secreto-no-publicar',
+    'https://www.linkedin.com/in/prueba?', 'https://www.linkedin.com/in/prueba#',
+    'https://www.linkedin.com/in/prueba%3Ftoken%3Dsecreto-no-publicar',
+    'https://www.linkedin.com/in/prueba%2Fotra-ruta',
+    'https://www.linkedin.com/in/prueba/otra-ruta',
+    'https://www.linkedin.com/in/../prueba', 'https://www.linkedin.com/company/prueba',
+    'https://www.linkedin.com/in/', 'https://www.linkedin.com/in/prueba\\@evil.example',
+    'https://www.linkedin.com/in/prueba\n', 'https://www.linkedin.com/\tin/prueba',
+    'https://www.linkedin.com/in/prueba" onclick="alert(1)',
+])
+def test_public_contact_rejects_external_confusable_or_secret_bearing_urls(value):
+    identity = public_metadata.legal_identity({
+        'PUBLIC_RESPONSIBLE_NAME': 'Responsable ficticio de prueba',
+        'PUBLIC_CONTACT_URL': value,
+    })
+    assert identity['url'] is None
+    assert identity['complete'] is False
+
+
+def test_profile_contact_completes_legal_pages_without_personal_email_or_phone(app):
+    app.config.update(PUBLIC_RESPONSIBLE_NAME='Matías Fernández',
+                      PUBLIC_CONTACT_URL='https://www.linkedin.com/in/perfil-ficticio-prueba',
+                      MAIL_FROM='Alertas <alertas@example.org>')
+    client = app.test_client()
+    for path in ('/privacidad', '/condiciones'):
+        response = client.get(path)
+        html = response.get_data(as_text=True)
+        assert 'Información preliminar' not in html
+        assert 'Matías Fernández' in html
+        assert 'Perfil de LinkedIn del responsable' in html
+        assert 'href="https://www.linkedin.com/in/perfil-ficticio-prueba"' in html
+        assert 'LinkedIn es un servicio externo' in html
+        assert 'tel:' not in html and 'mailto:' not in html
+        assert 'alertas@example.org' not in html
+        assert 'robots' not in Head(response).meta
+        assert 'X-Robots-Tag' not in response.headers
+    assert 'contactá al responsable por su perfil de LinkedIn' in client.get('/privacidad').get_data(as_text=True)
+    assert set(sitemap_locations(client.get('/sitemap.xml'))) == {
+        'https://empleos.example.org/', 'https://empleos.example.org/privacidad',
+        'https://empleos.example.org/condiciones'}
+
+
+def test_missing_profile_is_not_invented_from_responsible_name_or_sender(app):
+    app.config.update(PUBLIC_RESPONSIBLE_NAME='Matías Fernández',
+                      MAIL_FROM='Alertas <alertas@example.org>')
+    identity = public_metadata.legal_identity(app.config)
+    assert identity['url'] is None and identity['email'] == '' and identity['complete'] is False
+    client = app.test_client()
+    response = client.get('/privacidad')
+    assert 'Información preliminar' in response.get_data(as_text=True)
+    assert 'Pendiente de informar' in response.get_data(as_text=True)
+    assert Head(response).meta['robots'] == 'noindex, follow'
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+
+
+def test_rejected_profile_never_leaks_its_query_or_changes_indexability(app):
+    app.config.update(PUBLIC_RESPONSIBLE_NAME='Matías Fernández',
+                      PUBLIC_CONTACT_URL='https://www.linkedin.com/in/prueba?token=secreto-no-publicar')
+    client = app.test_client()
+    response = client.get('/privacidad')
+    html = response.get_data(as_text=True)
+    assert 'secreto-no-publicar' not in html
+    assert 'Perfil de LinkedIn del responsable' not in html
+    assert Head(response).meta['robots'] == 'noindex, follow'
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+
+
+def test_email_contact_api_remains_compatible_and_profile_needs_responsible_name():
+    identity = public_metadata.legal_identity({
+        'PUBLIC_RESPONSIBLE_NAME': 'Responsable ficticio',
+        'PUBLIC_CONTACT_EMAIL': 'contacto@example.org',
+        'PUBLIC_CONTACT_URL': 'https://evil.example/in/prueba',
+    })
+    assert identity['name'] == 'Responsable ficticio'
+    assert identity['email'] == 'contacto@example.org'
+    assert identity['mailto'] == 'mailto:contacto@example.org'
+    assert identity['complete'] is True and identity['url'] is None
+    assert public_metadata.legal_identity({
+        'PUBLIC_CONTACT_URL': 'https://www.linkedin.com/in/perfil-ficticio-prueba',
+    })['complete'] is False
 
 
 def test_private_links_never_appear_in_sitemap_robots_or_metadata(app):

@@ -1,5 +1,15 @@
 # Resultado por fase
 
+## Fuente autorizada y contacto del responsable — 19/10/2026
+
+El titular autorizó Jobicy como primera fuente, indicó su nombre público Matías Fernández, descartó teléfono público y eligió LinkedIn como contacto, con URL todavía pendiente. Eligió saltaemplea.com y anunció su compra: una consulta de registro lo encontró disponible, con precio Vercel USD 11,25 por un año y renovación USD 11,25 antes de impuestos, sin reservar ni comprarlo. Propiedad, DNS y HTTPS siguen sin verificar; se conserva el origen Vercel activo.
+
+Se preparó el registro declarativo de Jobicy solo en producción, con autorización explícita, condiciones, atribución y un marcador que impide duplicarlo o reactivar pausas del administrador. El build registra la fuente, sin consultar ofertas ni publicar. La configuración principal incluye una corrida diaria por tarea (recopilación, vigencia y correo); su instalación y primera ejecución se comprobarán después del despliegue. Las imágenes continúan privadas y Google Vision pausado.
+
+El contacto público admite un perfil HTTPS de LinkedIn de una lista cerrada, sin inferirlo del nombre ni publicar consultas o tokens. No se exige publicar un correo personal; las alertas requieren un remitente verificado independiente. Los datos del responsable y la habilitación de Jobicy se guardaron como configuración de Production, sin leer secretos.
+
+Suite local de esta ampliación: **716 aprobadas y 14 omitidas por falta de PostgreSQL de pruebas**. Los resultados de PostgreSQL/Chromium y del despliegue se registrarán al finalizar. Un cron declarado no demuestra una consulta real ni entrega de correo.
+
 ## Preparación de lanzamiento y recuperación — 19/10/2026
 
 Se pausó Google Vision guardando `OCR_ENABLED=0` como Secret, sin consultar ni retirar la clave, el cupo de 999 o los registros. El redespliegue `dpl_GYfrnTXaXnMzDA7hiN355ioWB84C`, commit `a2cd0d5`, terminó READY; `/publicar` respondió 200 sin la casilla de envío a Google. No se hicieron nuevas llamadas reales a Vision.
@@ -8,7 +18,9 @@ Se incorporaron cuotas persistentes y reserva de confirmaciones, webhook Resend 
 
 El ensayo OCR local usó tres imágenes propias PRUEBA y Tesseract con modelo inglés, sin red: error de caracteres de 1,91 %, 1,09 % y 47,14 %; el flyer de dos columnas cambió el orden de lectura y fallaron tildes. No había modelo español ni prueba móvil/Vercel. Se conserva transcripción manual, sin anunciar un OCR confiable. Ver OCR-SIN-API.md.
 
-La suite completa y el circuito Chromium de esta entrega se registrarán al finalizar CI. Las pruebas locales de correo usan respuestas sustituidas; no prueban recepción. El ensayo PostgreSQL requiere cliente 17 y una base de pruebas, nunca credenciales de producción.
+La [suite PostgreSQL 17](https://github.com/Matifernandezar/salta-emplea/actions/runs/39279420231), commit `8cd17a9`, pasó **660 pruebas sin omisiones en 16,91 segundos**, incluido pg_dump/pg_restore real a una base aislada y el aislamiento del origen. Localmente pasaron 648 y se omitieron 12 por falta de PostgreSQL de pruebas. El [circuito Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39279420209) terminó correctamente en 390 × 844 y 1440 × 1000: edición, aprobación, vigencia, imagen privada e idempotencia, con OCR sustituido; también confirmó producción de solo lectura, permisos y cron denegado. Las pruebas de correo no acreditan recepción real.
+
+Vercel publicó `8cd17a9` como `dpl_9d2qW79bxH79DB5h8r1fcSbNbKLK`, READY. Las consultas reales confirmaron salud SQL, sitemap, privacidad preliminar y suscripciones deshabilitadas. El ensayo local adicional con Chromium del sistema pasó los circuitos editoriales y de imagen en ambos tamaños, pero el navegador administrado bloqueó el archivo local del configurador; no se lo presenta como corrida local completa. El circuito de CI sí pasó ese helper.
 
 Siguen pendientes aceptación de la primera fuente, plan compatible con la programación, dominio/proveedor/remitente, identidad y contacto públicos y autorización de un correo de prueba. No hay cron instalado, correo real conectado, backup externo de producción ni retención automática. No se contrataron servicios, enviaron mensajes ni aprobaron ofertas en nombre del titular. El presupuesto es USD 30/mes; tarifas oficiales y dependencias se actualizaron en COSTOS.md.
 

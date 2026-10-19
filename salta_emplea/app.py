@@ -36,6 +36,7 @@ def create_app(config=None):
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', ''),
         PUBLIC_RESPONSIBLE_NAME=os.environ.get('PUBLIC_RESPONSIBLE_NAME', ''),
         PUBLIC_CONTACT_EMAIL=os.environ.get('PUBLIC_CONTACT_EMAIL', ''),
+        PUBLIC_CONTACT_URL=os.environ.get('PUBLIC_CONTACT_URL', ''),
         APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
@@ -197,7 +198,10 @@ def create_app(config=None):
         return result
 
     def settings_dict():
-        return {r['key']: r['value'] for r in connection().execute('SELECT * FROM settings')}
+        # El registro de webhooks y supresiones comparte la tabla: las páginas
+        # públicas solo necesitan estas tres opciones, nunca todo ese historial.
+        return {r['key']: r['value'] for r in connection().execute(
+            "SELECT key,value FROM settings WHERE key IN ('review_days','whatsapp_manual','social_manual')")}
 
     def mail_submission_ready():
         from . import mailer

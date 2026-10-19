@@ -45,13 +45,40 @@ def public_url(config, path):
     return origin + path
 
 
+def public_contact_url(config):
+    """Acepta solo un perfil público de LinkedIn configurado expresamente.
+
+    No se deriva un perfil del nombre, no se consulta LinkedIn y no se conserva
+    ningún parámetro que pudiera contener tokens o seguimiento. Los dominios
+    Unicode o codificados no se convierten a un dominio admitido por semejanza.
+    """
+    value = config.get('PUBLIC_CONTACT_URL') or ''
+    if (not isinstance(value, str) or len(value) > 500 or not value.isascii() or
+            any(c.isspace() or ord(c) < 32 for c in value) or
+            any(c in value for c in ('\\', '?', '#'))):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme != 'https' or parsed.username is not None or
+                parsed.password is not None or parsed.query or parsed.fragment or
+                parsed.port not in (None, 443) or
+                not re.fullmatch(r'(?:www\.)?linkedin\.com(?::443)?', parsed.netloc, re.I) or
+                not re.fullmatch(r'/in/[A-Za-z0-9][A-Za-z0-9-]{0,199}/?', parsed.path)):
+            return None
+        return 'https://' + parsed.hostname.lower() + parsed.path.rstrip('/')
+    except ValueError:
+        return None
+
+
 def legal_identity(config):
     name = str(config.get('PUBLIC_RESPONSIBLE_NAME') or '').strip()[:200]
     email = str(config.get('PUBLIC_CONTACT_EMAIL') or '').strip()[:254]
     if (not re.fullmatch(r'[^\s@<>"?&#]+@[^\s@<>"?&#]+\.[^\s@<>"?&#]+', email) or
             any(ord(c) < 32 for c in email)):
         email = ''
-    return {'name': name, 'email': email, 'complete': bool(name and email),
+    contact_url = public_contact_url(config)
+    return {'name': name, 'email': email, 'url': contact_url,
+            'complete': bool(name and (email or contact_url)),
             'mailto': 'mailto:' + quote(email, safe='@.+-') if email else None}
 
 

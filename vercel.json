@@ -4,5 +4,10 @@
   "buildCommand": "python scripts/prepare_vercel.py",
   "functions": {
     "wsgi.py": { "maxDuration": 300 }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/collect", "schedule": "20 18 * * *" },
+    { "path": "/api/cron/expire", "schedule": "30 18 * * *" },
+    { "path": "/api/cron/mail", "schedule": "50 18 * * *" }
+  ]
 }

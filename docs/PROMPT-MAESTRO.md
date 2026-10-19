@@ -36,11 +36,11 @@ Leé las instrucciones locales y contrastá código, documentación, CI y despli
 
 Completá estos datos con las respuestas de esta conversación y no vuelvas a pedir información ya respondida:
 
-- Dominio propio y proveedor de correo existentes: PENDIENTE.
-- Nombre público de la persona u organización responsable: PENDIENTE.
-- Correo público para contacto, correcciones, retiro y privacidad: PENDIENTE.
+- Dominio: el titular eligió saltaemplea.com y anunció que lo comprará; propiedad, DNS y proveedor de correo todavía sin verificar.
+- Nombre público del responsable: Matías Fernández, indicado expresamente por el titular el 19/10/2026.
+- Contacto público: sin teléfono ni correo personal; el titular eligió su LinkedIn. URL exacta PENDIENTE, no inferirla de su nombre. El remitente de alertas del dominio es una configuración independiente.
 - Autorización para probar confirmación, resumen y baja con ese correo: PENDIENTE. Sin autorización, no envíes mensajes reales.
-- Aceptación de Jobicy u otra API/feed autorizado como primera fuente, frente a limitarse a las tres fuentes elegidas: PENDIENTE.
+- Jobicy fue aceptado como primera fuente mediante autorización del titular el 19/10/2026; mantener atribución, enlace y aprobación editorial. No volver a pedir esa elección.
 - Imágenes solo privadas o también flyers públicos con permiso de reutilización: PENDIENTE. Conservá los originales privados mientras no se defina.
 - Canales propios disponibles para compartir manualmente: PENDIENTE. No supongas que administra una cuenta por haberla mencionado.
 
