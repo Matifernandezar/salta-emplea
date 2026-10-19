@@ -94,6 +94,8 @@ Separá permiso de extracción y permiso de publicación. Los flyers públicos r
 
 ## 8. Alertas por correo
 
+**Pausa indicada por el titular el 19/10/2026:** priorizar la web en saltaemplea.com; no solicitar cuentas ni credenciales, configurar envíos ni realizar pruebas de correo hasta que indique retomar. Conservar la implementación, el historial y los requisitos siguientes para esa etapa.
+
 Configurá un proveedor y remitente válidos dentro del presupuesto, con dominio y DNS verificados. Prepará SPF/DKIM y una política DMARC adecuada. No presentes un dominio de prueba como remitente de producción para cualquier destinatario.
 
 Revisá doble consentimiento, filtros por localidad/rubro/modalidad, frecuencia diaria/semanal, confirmación y vencimiento de enlaces, baja visible y sencilla, y eliminación solicitada. Enviá solo ofertas aprobadas, activas y compatibles con las preferencias al momento del envío.

@@ -1,5 +1,11 @@
 # Resultado por fase
 
+## Prioridad del dominio y pausa de correo — 19/10/2026
+
+El titular indicó dejar el correo en pausa y priorizar que la web se vea con su dominio. Se volvió a comprobar HTTPS en `https://saltaemplea.com/`: HTTP 200, portada de Salta Emplea y canónica propia; el ingreso al panel también respondió 200. Se agregó `www.saltaemplea.com` al mismo proyecto, sin cambiar registros DNS existentes: Vercel lo verifica y una petición HTTPS devuelve **308** al dominio principal. No se realizaron compras ni cambios de plan.
+
+Se documentó la pausa para no solicitar cuentas ni credenciales o configurar/probar envíos hasta que el titular retome esa etapa. El proveedor permanece sin configurar y las suscripciones siguen cerradas. Esta fase modifica configuración del dominio y documentación; no cambia datos editoriales, código ni esquema y no requiere repetir la suite anterior.
+
 ## Dominio propio y contacto público — 19/10/2026
 
 El titular confirmó la compra de **saltaemplea.com** y proporcionó su perfil exacto de LinkedIn. Vercel lo muestra asociado a `salta-emplea`, `verified=true`, con DNS sin conflictos ni configuración incorrecta. HTTPS `/salud` respondió 200 con consulta SQL correcta. Se actualizaron únicamente las variables públicas de Production, sin leer secretos; el remitente de correo sigue sin configurar. El perfil conserva la tilde mediante UTF-8, sin transliteración ni parámetros de seguimiento.

@@ -1,5 +1,7 @@
 # Alertas por correo
 
+**En pausa por decisión del titular, 19/10/2026:** priorizar la web en saltaemplea.com. Hasta que indique retomar, no solicitar cuentas ni credenciales, configurar envíos ni realizar pruebas de correo; las instrucciones siguientes se conservan para esa etapa.
+
 Estado de esta fase, 19/10/2026: el circuito de consentimiento, la bandeja persistente, los límites y la recepción firmada de supresiones están implementados y probados con datos locales y proveedor sustituido. **No se enviaron correos reales en esta fase.** El dominio web saltaemplea.com ya tiene DNS y HTTPS verificados. Faltan la cuenta Resend, verificación específica del dominio para enviar correo, remitente, configuración privada y autorización de un destinatario para comprobar recepción. La configuración por sí sola no demuestra entrega.
 
 El formulario de producción permanece cerrado mientras falten datos públicos válidos del responsable y contacto, o la configuración del remitente no sea apta. No registra direcciones en ese estado. La baja revoca el enlace de confirmación anterior; una nueva solicitud genera otro token. Una confirmación incierta se concilia antes de preparar otra.
