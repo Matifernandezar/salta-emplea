@@ -2,6 +2,8 @@
 
 Entrega de diseño e implementación del 20 de octubre de 2026. Usa Flask y HTML renderizado en servidor; no cambia el esquema de datos ni agrega dependencias de interfaz.
 
+**Actualización de publicación:** el titular autorizó aplicar los cambios el 20/10/2026. La PR 1 se fusionó en `main` como `5d19a63bb1a697f83d762a11d24eca893b98eb0d`. Vercel publicó el despliegue `dpl_5rSjxMAej74cFQcLVRD6fwHZUftw`, estado READY, en https://saltaemplea.com/. Se confirmó HTTP 200 con el H1 y title nuevos y salud SQL `{"status":"ok"}`. El correo continúa en pausa. El estado de Preview descrito más abajo es independiente de este despliegue de producción.
+
 ## Decisiones y recorrido
 
 La acción principal es buscar, filtrar, abrir una ficha y consultar su canal de postulación. El buscador muestra puesto/palabra y ubicación antes de los filtros adicionales. Las ofertas aparecen antes de los módulos secundarios en el orden del documento. Publicar una oferta es una acción secundaria que conserva el formulario existente.
@@ -65,7 +67,7 @@ El workflow también conserva una comprobación pública de solo lectura del sit
 
 Las pruebas HTTP y el circuito de navegador pasaron en CI; el detalle figura en evidencia. Chromium no puede arrancar en el sandbox local por restricciones del sistema; el workflow realiza esa comprobación en un runner aislado. El intento local fallido no se presenta como una prueba aprobada.
 
-Las alertas por correo siguen en pausa y no se ofrece un alta ficticia. Google Vision permanece deshabilitado. No se aprobaron ni modificaron ofertas de producción, no se contrataron servicios y no se cambiaron secretos. La rama de revisión no sustituye el despliegue de producción.
+Las alertas por correo siguen en pausa y no se ofrece un alta ficticia. Google Vision permanece deshabilitado. No se aprobaron ni modificaron ofertas de producción, no se contrataron servicios y no se cambiaron secretos. La publicación autorizada usa la base y las variables de producción existentes; no necesita una base de Preview para operar.
 
 Antes de lanzar, el titular debe revisar y retirar cualquier aviso de prueba publicado y comprobar la elegibilidad de los remotos. Este cambio de interfaz no certifica ese inventario. No se midieron Core Web Vitals de usuarios, indexación real ni recepción de alertas.
 
@@ -80,4 +82,12 @@ Antes de lanzar, el titular debe revisar y retirar cualquier aviso de prueba pub
 - Se inspeccionaron también las capturas finales de filtros y guía de CV en 390 px: controles apilados, filtros conservados, texto y ejemplo legibles, sin recortes de página. El circuito de postulación usa un destino interceptado de prueba; no envía una candidatura real. El OCR del circuito previo usa un proveedor sustituido y no prueba una lectura real.
 - [Registro resumido de verificación](verificacion-2026-10-20.json). Las capturas recuperadas están en la carpeta local `docs/portada/capturas/`, excluida de Git para evitar confundir archivos generados con código. En GitHub se obtienen desde el artefacto del workflow indicado; caduca a los tres días.
 
-La [propuesta de revisión](https://github.com/Matifernandezar/salta-emplea/pull/1) conserva el código y la evidencia. Vercel intentó crear automáticamente una vista previa de la rama y falló antes del despliegue: el [log del build](https://vercel.com/matias-projects-2dbf9656/salta-emplea/Gj9gDkGdLimr8dRyGXkRuKj7rCxQ) indica que falta `DATABASE_URL` PostgreSQL en Preview. Para habilitar una URL de revisión en Vercel hay que configurar una base aislada y sus variables de Preview; no corresponde compartir la base ni secretos de producción con una PR. La revisión actual se puede realizar con las capturas, CI o la instalación local. El dominio de producción no se modificó.
+La [PR fusionada](https://github.com/Matifernandezar/salta-emplea/pull/1) conserva el código y la evidencia. Durante la revisión, Vercel intentó crear automáticamente una vista previa de la rama y falló antes del despliegue: el [log del build](https://vercel.com/matias-projects-2dbf9656/salta-emplea/Gj9gDkGdLimr8dRyGXkRuKj7rCxQ) indica que falta `DATABASE_URL` PostgreSQL en Preview. Sigue pendiente configurar una base aislada si se necesita ese entorno; no corresponde compartir la base ni secretos de producción con una PR. Esta limitación no afecta al dominio de producción publicado.
+
+## Comprobación y recuperación de la publicación
+
+El workflow de Chromium en `main` comprueba el dominio público con GET/HEAD y sin credenciales: salud SQL, buscador, conservación de filtros, panel privado y rechazo de tareas sin autorización. La comprobación adicional reconoce la nueva portada, comprueba title/canonical/robots sin los parámetros de un enlace de acceso temporal, abre una ficha vigente si existe y consulta las tres guías con canonical propio. No abre ni envía la postulación externa ni manda formularios. Los logs y capturas se consultan en [Actions](https://github.com/Matifernandezar/salta-emplea/actions/workflows/navegador.yml).
+
+Punto de recuperación anterior a la publicación: `dpl_5fKE1bK4UnBwaav17AjUb4Ru36Wc`, commit `8c09b16bee37fb9dd4450d13e1bd98c77f663e15`. Ante una regresión, restaurar ese despliegue desde Vercel y comprobar `/salud` y el dominio. No hay migraciones nuevas ni cambios de datos que revertir por esta portada. El rollback de Vercel puede detener la asignación automática de dominios: revisar ese estado antes del siguiente despliegue.
+
+La consulta inicial de logs de error/fatal del despliegue no devolvió grupos de errores. No demuestra monitoreo continuo; no se pudo confirmar la lista de drains porque la API devolvió 404. No se configuraron servicios, planes ni alertas nuevas.

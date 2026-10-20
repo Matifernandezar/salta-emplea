@@ -426,6 +426,39 @@ def check_public_backend(context, page, origin):
     expect(page.get_by_role('heading', level=1)).to_contain_text(
         re.compile(r'Encontrá trabajo en Salta|Tu próximo trabajo'))
 
+    if page.get_by_role('heading', level=1).inner_text() == 'Encontrá trabajo en Salta.':
+        # Consulta pública sin parámetros de acceso temporario: permite comprobar
+        # los metadatos que recibe un visitante normal, sin autenticarlo.
+        expect(page.locator('meta[name="robots"]')).to_have_count(0)
+        expect(page.locator('link[rel="canonical"]')).to_have_attribute('href', origin + '/')
+        assert page.title() == 'Trabajo en Salta y ofertas de empleo | Salta Emplea'
+        expect(page.locator('.preview-banner')).to_have_count(0)
+        published = page.locator('.job-card h3 a')
+        detail_checked = False
+        if published.count():
+            href = published.first.get_attribute('href')
+            assert re.fullmatch(r'/ofertas/\d+', href), 'Destino de ficha inesperado.'
+            assert page.goto(origin + href, timeout=20000).status == 200
+            expect(page.get_by_role('heading', level=1)).to_be_visible()
+            expect(page.get_by_role('link', name='Postularme', exact=True)).to_be_visible()
+            no_horizontal_overflow(page)
+            detail_checked = True
+        for slug in ('cv-sin-experiencia', 'como-postularse', 'ofertas-laborales-falsas'):
+            path = '/guias/' + slug
+            response = page.goto(origin + path, timeout=20000)
+            assert response.status == 200, f'{path}: HTTP {response.status}'
+            expect(page.get_by_role('heading', level=1)).to_be_visible()
+            expect(page.locator('link[rel="canonical"]')).to_have_attribute('href', origin + path)
+            expect(page.locator('meta[name="robots"]')).to_have_count(0)
+            assert 'noindex' not in response.headers.get('x-robots-tag', '')
+            no_horizontal_overflow(page)
+        assert page.goto(origin + '/', timeout=20000).status == 200
+        detail_status = ('ficha y canal de postulación disponibles' if detail_checked
+                         else 'sin fichas publicadas para comprobar')
+        print('PORTADA PUBLICADA: title/canonical/robots, sin banner de prueba, '
+              + detail_status + ', tres guías HTTP 200. '
+              'Solo lectura; no se abrió ni envió la postulación externa.')
+
     filters = {'q': 'salta', 'modality': 'remota', 'days': '7'}
     page.locator('[name="q"]').fill(filters['q'])
     open_search_filters(page)
