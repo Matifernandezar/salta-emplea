@@ -14,7 +14,9 @@ El formulario de producción permanece cerrado mientras falten datos públicos v
 4. Conservar los nombres, tipos y valores DNS generados. Son datos de verificación del dominio, diferentes de una clave API; pueden usarse para preparar los registros en Vercel DNS. No modificar los registros de la web ni el MX de una casilla existente.
 5. Esperar el estado **Verified**. Como remitente se propone **Salta Emplea**, con la dirección `avisos@alerts.saltaemplea.com`; esta dirección no crea una casilla receptora ni reemplaza el contacto público en LinkedIn. No crear ni compartir claves todavía.
 
-Después de verificar el dominio se prepara primero el webhook y su secreto; luego la clave API con **Sending access**, limitada al subdominio. Los secretos se guardan directamente en **Vercel → salta-emplea → Settings → Environment Variables → Production**, como Secret. Los nombres figuran abajo; no enviar los valores por chat. No completar la activación y el despliegue con API y remitente hasta acordar un destinatario y su consentimiento: el código actual habilita el formulario con esos datos y el programador existente podría intentar entregar mensajes aunque faltase el webhook.
+Después de verificar el dominio se prepara primero el webhook y su secreto; luego la clave API con **Sending access**, limitada al subdominio. Los secretos se guardan directamente en **Vercel → salta-emplea → Settings → Environment Variables → Production**, como Secret. Los nombres figuran abajo; no enviar los valores por chat. Mantener `MAIL_ENABLED` deshabilitado mientras se prepara la cuenta. Cargar API y remitente ya no activa el envío por sí solo: también se exige habilitación explícita, secreto de webhook con formato válido y topes positivos.
+
+El panel privado muestra los requisitos faltantes en Configuración y Automatización. Esa comprobación es local: no consulta el proveedor ni prueba DNS, permisos, recepción o que el webhook esté conectado. Una vez que Resend muestre Verified y el destinatario autorice la prueba, habilitar expresamente el envío y desplegar. Para pausar, deshabilitar `MAIL_ENABLED` y desplegar; las variables de Vercel solo cambian el runtime de los nuevos despliegues. La pausa oculta el formulario público y conserva la cola sin nuevos intentos. El endpoint de rebotes y quejas sigue aceptando eventos firmados durante la pausa.
 
 Agregar el dominio en Resend y publicar sus registros no crea una casilla de correo ni acredita recepción de las alertas. La prueba con un destinatario autorizado es un paso posterior.
 
@@ -37,6 +39,7 @@ Guardar los secretos como variables sensibles del proveedor. No compartir valore
 
 | Variable | Función |
 | --- | --- |
+| `MAIL_ENABLED` | Habilitación explícita. Ausente o con cualquier valor distinto del indicador exacto de habilitación, el envío y el formulario permanecen cerrados. Predeterminado deshabilitado. |
 | `RESEND_API_KEY` | Credencial de envío, con el menor alcance disponible. |
 | `MAIL_FROM` | Remitente del dominio autorizado. |
 | `RESEND_WEBHOOK_SECRET` | Secreto de firma del webhook; es distinto de la clave de envío. |
@@ -48,6 +51,10 @@ Guardar los secretos como variables sensibles del proveedor. No compartir valore
 | `MAIL_CONFIRMATION_RESERVE_DAILY` | Capacidad diaria que los resúmenes no pueden consumir; predeterminado 10. |
 | `MAIL_CONFIRMATION_RESERVE_MONTHLY` | Capacidad mensual que los resúmenes no pueden consumir; predeterminado 100. |
 | `TASK_MAIL_BATCH` | Cantidad máxima por corrida; además se respetan tiempo, cuotas y bloqueo de tareas. |
+
+El indicador de habilitación es `1`; `0` pausa. No representa la aprobación de una oferta ni sustituye el consentimiento del destinatario. El diagnóstico CLI separa presencia de variables y preparación local del envío. Un secreto con formato válido no acredita que sea real ni que el proveedor esté conectado: la conexión exige la prueba firmada real indicada más abajo.
+
+Si es necesario volver a una versión anterior que no conozca el indicador de pausa, primero deshabilitar la credencial de envío y desplegar esa configuración. Esas versiones no respetan `MAIL_ENABLED`. No borrar mensajes, reservas ni historial para preparar un rollback.
 
 Un límite inválido se interpreta como cero para cerrar el envío. Las reservas de confirmación se acotan al tope correspondiente. Una reserva cero elimina esa separación; no conviene reducirla sin observar las solicitudes de suscripción.
 

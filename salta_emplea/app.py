@@ -40,6 +40,7 @@ def create_app(config=None):
         PUBLIC_CONTACT_EMAIL=os.environ.get('PUBLIC_CONTACT_EMAIL', ''),
         PUBLIC_CONTACT_URL=os.environ.get('PUBLIC_CONTACT_URL', ''),
         APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
+        MAIL_ENABLED=os.environ.get('MAIL_ENABLED', '0'),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
         RESEND_WEBHOOK_SECRET=os.environ.get('RESEND_WEBHOOK_SECRET', ''),
@@ -207,11 +208,19 @@ def create_app(config=None):
         return {r['key']: r['value'] for r in connection().execute(
             "SELECT key,value FROM settings WHERE key IN ('review_days','whatsapp_manual','social_manual')")}
 
-    def mail_submission_ready():
+    def mail_configuration_state():
         from . import mailer
+        state = mailer.delivery_readiness(app.config)
+        if production and not public_metadata.legal_identity(app.config)['complete']:
+            state['missing'].append({'key': 'responsable', 'message': 'Completar el responsable y un contacto público válido.'})
+            state['ready'] = False
+        return state
+
+    def mail_submission_ready():
+        if app.config.get('MAIL_ENABLED') != '1':
+            return False
         if production:
-            return (mailer._valid_delivery_config(app.config)
-                    and public_metadata.legal_identity(app.config)['complete'])
+            return mail_configuration_state()['ready']
         # Desarrollo prueba una bandeja inerte; send_outbox impide los envíos.
         return bool(app.config['PUBLIC_BASE_URL'] and app.config['RESEND_API_KEY'] and app.config['MAIL_FROM'])
 
@@ -436,13 +445,14 @@ def create_app(config=None):
         for run in runs:
             run['result_summary'] = automation_result(run['detail'])
         cron_last = conn.execute("SELECT created_at FROM audit WHERE actor='programador' AND action='cron_recibido' ORDER BY id DESC LIMIT 1").fetchone()
+        mail_state = mail_configuration_state()
         return render_template('automation.html', sources=sources, task_runs=runs,
             database_type='PostgreSQL' if db.is_postgres(app.config['DATABASE_TARGET']) else 'SQLite',
             mail_key_present=bool(app.config['RESEND_API_KEY']),
             mail_sender_present=bool(app.config['MAIL_FROM']),
-            mail_ready=mailer._valid_delivery_config(app.config),
+            mail_ready=mail_state['ready'], mail_status=mail_state,
             mail_quota=mailer.quota_status(conn, app.config),
-            mail_webhook_ready=bool(app.config['RESEND_WEBHOOK_SECRET']),
+            mail_webhook_ready=not any(item['key'] == 'webhook' for item in mail_state['missing']),
             operational=operations.operations_snapshot(conn, app.config),
             cron_key_present=bool(app.config['CRON_SECRET']),
             cron_last=cron_last['created_at'] if cron_last else None,
@@ -702,7 +712,9 @@ def create_app(config=None):
                 flash('Configuración guardada.', 'success')
             except ValueError as exc:
                 flash(str(exc), 'error')
-        return render_template('settings.html', settings=settings_dict(), channels=channels(), mail_ready=bool(app.config['RESEND_API_KEY'] and app.config['MAIL_FROM']))
+        mail_state = mail_configuration_state()
+        return render_template('settings.html', settings=settings_dict(), channels=channels(),
+                               mail_ready=mail_state['ready'], mail_status=mail_state)
 
     @app.route('/alertas', methods=['GET', 'POST'])
     def subscribe():

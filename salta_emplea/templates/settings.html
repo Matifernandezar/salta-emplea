@@ -31,11 +31,7 @@
 <button class="button" type="submit">Guardar configuración</button>
 </form>
 <div class="admin-grid">
-<section class="paper form-paper">
-<h2>Correo</h2>
-<p>Las alertas requieren un proveedor configurado, un remitente autorizado y el programador de tareas activo. La confirmación y cada envío quedan registrados en el panel.</p>
-<p class="small">Las credenciales se configuran como variables de entorno del servidor, fuera del código. Nunca las ingreses en una oferta o fuente.</p>
-</section>
+{% include '_mail_setup.html' %}
 <section class="paper form-paper">
 <h2>Publicación automática</h2>
 <p>Los canales actuales ofrecen preparación manual. Para automatizar la publicación se necesitan cuentas propias, permisos y una integración oficial compatible.</p>

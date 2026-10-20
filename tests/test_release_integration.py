@@ -84,7 +84,8 @@ def test_production_rejects_collecting_addresses_for_test_sender(tmp_path):
     app = create_app({'TESTING': True, 'APP_ENV': 'production', 'SECRET_KEY': 'clave-ficticia-' * 4,
         'ADMIN_PASSWORD_HASH': 'hash-ficticio-no-usado', 'PUBLIC_BASE_URL': 'https://empleos.pruebas.ar',
         'DATABASE_PATH': str(path), 'UPLOAD_DIR': str(tmp_path / 'imagenes'),
-        'RESEND_API_KEY': 'clave-ficticia', 'MAIL_FROM': 'onboarding@resend.dev'})
+        'RESEND_API_KEY': 'clave-ficticia', 'MAIL_FROM': 'onboarding@resend.dev',
+        'MAIL_ENABLED': '1', 'RESEND_WEBHOOK_SECRET': 'whsec_cHJ1ZWJhLWZpY3RpY2lhLW5vLXNlY3JldG8='})
     client = app.test_client()
     origin = 'https://empleos.pruebas.ar'
     with client.session_transaction(base_url=origin) as state:
@@ -105,7 +106,8 @@ def test_resubscription_cannot_reactivate_a_confirmation_revoked_by_unsubscribe(
     secret = 'clave-local-solo-de-pruebas'
     app = create_app({'TESTING': True, 'APP_ENV': 'development', 'SECRET_KEY': secret,
         'PUBLIC_BASE_URL': 'https://example.test', 'RESEND_API_KEY': 'clave-ficticia',
-        'MAIL_FROM': 'prueba@example.test', 'DATABASE_PATH': str(path), 'UPLOAD_DIR': str(tmp_path / 'imagenes')})
+        'MAIL_FROM': 'prueba@example.test', 'MAIL_ENABLED': '1',
+        'DATABASE_PATH': str(path), 'UPLOAD_DIR': str(tmp_path / 'imagenes')})
     client = app.test_client()
     with client.session_transaction() as state:
         state['csrf'] = 'csrf-local'
@@ -137,6 +139,7 @@ def test_production_requires_public_responsible_before_collecting_subscriptions(
         'ADMIN_PASSWORD_HASH': 'hash-ficticio-no-usado', 'PUBLIC_BASE_URL': 'https://empleos.pruebas.ar',
         'DATABASE_PATH': str(path), 'UPLOAD_DIR': str(tmp_path / 'imagenes'),
         'RESEND_API_KEY': 'clave-ficticia', 'MAIL_FROM': 'PRUEBA <alertas@pruebas.ar>',
+        'MAIL_ENABLED': '1', 'RESEND_WEBHOOK_SECRET': 'whsec_cHJ1ZWJhLWZpY3RpY2lhLW5vLXNlY3JldG8=',
         'PUBLIC_RESPONSIBLE_NAME': '', 'PUBLIC_CONTACT_EMAIL': ''})
     client = app.test_client()
     origin = 'https://empleos.pruebas.ar'

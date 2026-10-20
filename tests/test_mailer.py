@@ -1,5 +1,6 @@
 """Pruebas locales: el proveedor siempre está sustituido, no salen correos reales."""
 
+import base64
 import json
 from datetime import timedelta
 from urllib.error import HTTPError, URLError
@@ -14,6 +15,7 @@ from salta_emplea.domain import create_job, transition_job
 
 SECRET = "clave-de-pruebas-locales-sin-uso-en-produccion"
 BASE_URL = "https://empleos.pruebas.ar"
+WEBHOOK_SECRET = "whsec_" + base64.b64encode(b"PRUEBA-secreto-webhook-aislado").decode("ascii")
 
 
 @pytest.fixture
@@ -28,7 +30,8 @@ def database(tmp_path):
 @pytest.fixture
 def config():
     return {"APP_ENV": "production", "RESEND_API_KEY": "solo-prueba", "MAIL_FROM": "Alertas <alertas@pruebas.ar>",
-            "PUBLIC_BASE_URL": BASE_URL, "SECRET_KEY": SECRET}
+            "PUBLIC_BASE_URL": BASE_URL, "SECRET_KEY": SECRET,
+            "MAIL_ENABLED": "1", "RESEND_WEBHOOK_SECRET": WEBHOOK_SECRET}
 
 
 def subscriber(conn, *, status="confirmed", **overrides):
@@ -162,6 +165,84 @@ def test_sin_produccion_configurada_deja_cola_pendiente(database, config, monkey
     assert mailer.send_outbox(database, config) == {"queued": 0, "sent": 0, "skipped": 1, "errors": 0}
     assert outbox(database)["status"] == "pending"
     assert outbox(database)["attempts"] == 0
+
+
+@pytest.mark.parametrize("override,key", [
+    ({"MAIL_ENABLED": None}, "pausado"),
+    ({"MAIL_ENABLED": "0"}, "pausado"),
+    ({"MAIL_ENABLED": "true"}, "pausado"),
+    ({"MAIL_ENABLED": " 1"}, "pausado"),
+    ({"MAIL_ENABLED": 1}, "pausado"),
+    ({"MAIL_ENABLED": True}, "pausado"),
+    ({"RESEND_WEBHOOK_SECRET": ""}, "webhook"),
+    ({"RESEND_WEBHOOK_SECRET": "whsec_no-es-base64"}, "webhook"),
+    ({"RESEND_WEBHOOK_SECRET": "whsec_" + base64.b64encode(b"corto").decode("ascii")}, "webhook"),
+    ({"MAIL_DAILY_LIMIT": "0"}, "limites"),
+    ({"MAIL_MONTHLY_LIMIT": "0"}, "limites"),
+    ({"MAIL_MONTHLY_LIMIT": "sin-limite"}, "limites"),
+])
+def test_activacion_incompleta_no_toca_cola_intentos_reservas_ni_suscriptores(
+        database, config, monkeypatch, override, key):
+    subscriber(database)
+    pending_id = subscriber(database, status="pending")
+    job(database)
+    mailer.queue_digests(database, BASE_URL, SECRET)
+    mailer.queue_confirmation(database, pending_id, BASE_URL, SECRET)
+    config.update(override)
+    before = {
+        table: [dict(row) for row in database.execute(f"SELECT * FROM {table} ORDER BY id")]
+        for table in ("outbox", "subscribers", "audit")
+    }
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+
+    readiness = mailer.delivery_readiness(config)
+    assert not readiness["ready"]
+    assert key in {item["key"] for item in readiness["missing"]}
+    result = mailer.send_outbox(database, config)
+
+    assert result["sent"] == 0 and result["skipped"] == 2
+    for table, rows in before.items():
+        assert [dict(row) for row in database.execute(f"SELECT * FROM {table} ORDER BY id")] == rows
+    assert mailer.quota_status(database, config)["daily"]["used"] == 0
+
+
+def test_readiness_describe_solo_pendientes_fijos_sin_revelar_valores(config):
+    config.update(
+        MAIL_ENABLED="0", APP_ENV="desarrollo-privado", SECRET_KEY="",
+        RESEND_API_KEY="", MAIL_FROM="remitente-privado-invalido",
+        PUBLIC_BASE_URL="http://destino-privado-invalido", RESEND_WEBHOOK_SECRET="secreto-webhook-invalido",
+        MAIL_DAILY_LIMIT=0,
+    )
+    result = mailer.delivery_readiness(config)
+    assert not result["ready"]
+    assert {item["key"] for item in result["missing"]} == {
+        "pausado", "entorno", "url", "clave_app", "api", "remitente", "webhook", "limites",
+    }
+    serialized = json.dumps(result)
+    assert all(str(value) not in serialized for key, value in config.items()
+               if key in {"APP_ENV", "MAIL_FROM", "PUBLIC_BASE_URL", "RESEND_WEBHOOK_SECRET"})
+    assert all(set(item) == {"key", "message"} for item in result["missing"])
+
+
+def test_readiness_no_exige_una_consulta_al_proveedor_o_a_la_base(config, monkeypatch):
+    monkeypatch.setattr(mailer, "urlopen", block_network)
+    assert mailer.delivery_readiness(config) == {"ready": True, "missing": []}
+    assert mailer._valid_delivery_config(config)
+    del config["MAIL_ENABLED"]
+    assert not mailer._valid_delivery_config(config)
+
+
+@pytest.mark.parametrize("size,valid", [(15, False), (16, True), (64, True), (65, False)])
+def test_secreto_webhook_respeta_el_mismo_limite_que_svix(config, size, valid):
+    from salta_emplea.mail_webhooks import WebhookError, verify_signature
+
+    config["RESEND_WEBHOOK_SECRET"] = "whsec_" + base64.b64encode(b"x" * size).decode("ascii")
+    result = mailer.delivery_readiness(config)
+    assert result["ready"] is valid
+    assert ("webhook" in {item["key"] for item in result["missing"]}) is not valid
+    with pytest.raises(WebhookError) as error:
+        verify_signature(b"{}", {}, config["RESEND_WEBHOOK_SECRET"])
+    assert error.value.code == ("invalid_signature" if valid else "not_configured")
 
 
 def test_envio_real_mock_revalida_aprobacion_y_registra_solo_un_envio(database, config, monkeypatch):

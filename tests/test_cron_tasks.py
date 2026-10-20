@@ -21,6 +21,7 @@ def conn(tmp_path):
 def config():
     return {
         'APP_ENV': 'production', 'SECRET_KEY': 'solo-pruebas-sin-uso-en-produccion',
+        'MAIL_ENABLED': '1', 'RESEND_WEBHOOK_SECRET': 'whsec_cHJ1ZWJhLWZpY3RpY2lhLW5vLXNlY3JldG8=',
         'RESEND_API_KEY': 'proveedor-sustituido', 'MAIL_FROM': 'alertas@pruebas.ar',
         'PUBLIC_BASE_URL': 'https://empleos.pruebas.ar',
         'TASK_BUDGET_SECONDS': 180, 'TASK_MAIL_BATCH': 10, 'TASK_SOURCE_BATCH': 1,

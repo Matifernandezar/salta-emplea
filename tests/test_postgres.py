@@ -211,6 +211,7 @@ def test_postgres_http_serverless_editorial_images_alerts_and_cron(postgres, tmp
         "UPLOAD_DIR": str(tmp_path / "no-debe-crearse"),
         # Proveedor sustituido debajo: ninguna conexión ni entrega real.
         "RESEND_API_KEY": "credencial-ficticia-solo-pruebas", "MAIL_FROM": "PRUEBA <alertas@pruebas.ar>",
+        "MAIL_ENABLED": "1", "RESEND_WEBHOOK_SECRET": "whsec_cHJ1ZWJhLWZpY3RpY2lhLW5vLXNlY3JldG8=",
     })
     class Accepted:
         def __enter__(self):

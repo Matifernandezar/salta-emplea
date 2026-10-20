@@ -1,0 +1,18 @@
+{% set mail_status = mail_status|default({'ready': false, 'missing': []}) %}
+<section class="paper admin-section" aria-labelledby="mail-setup-title">
+  <h2 id="mail-setup-title">Preparar alertas por correo</h2>
+  {% if mail_status.ready %}
+  <p class="notice notice-success">Configuración local preparada para intentar envíos. Esto no acredita la verificación del dominio ni la recepción de mensajes.</p>
+  {% else %}
+  <p>El envío está pausado o incompleto. Los mensajes pendientes se conservan sin gastar intentos.</p>
+  <ul>{% for item in mail_status.missing %}<li>{{ item.message }}</li>{% endfor %}</ul>
+  {% endif %}
+  <ol>
+    <li>Crear una cuenta en <a href="https://resend.com/signup" rel="noopener noreferrer" target="_blank">Resend</a>. Revisar su <a href="https://resend.com/pricing" rel="noopener noreferrer" target="_blank">plan Free y límites actuales</a> antes de contratar un servicio.</li>
+    <li>Agregar <strong>alerts.saltaemplea.com</strong> en Domains. Copiar a Vercel DNS los registros exactos generados y esperar que Resend muestre Verified. No reemplazar los registros de la web ni del correo existente.</li>
+    <li>Preparar el remitente del subdominio verificado y el webhook de rebotes, quejas y supresiones. Guardar las claves solo en los campos privados del alojamiento; no pegarlas en este panel ni en un aviso.</li>
+    <li>Acordar un destinatario de prueba y su autorización. Activar expresamente el envío después de completar la configuración.</li>
+    <li>Comprobar recepción de confirmación, resumen y baja. Una respuesta aceptada por el proveedor no demuestra que el mensaje llegó a la bandeja.</li>
+  </ol>
+  <p class="small">El subdominio de envío no crea una casilla para recibir respuestas. Esta lista muestra requisitos de configuración; no consulta Resend ni comprueba DNS. La habilitación se controla en el alojamiento, fuera de los formularios públicos.</p>
+</section>

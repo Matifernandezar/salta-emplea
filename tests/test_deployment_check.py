@@ -1,4 +1,5 @@
 """El diagnóstico incompleto nunca arranca servicios ni expone credenciales."""
+import base64
 import sys
 
 import pytest
@@ -101,6 +102,52 @@ def test_mail_is_optional_and_requires_both_settings(configured):
     checks = by_name(check_production(configured))
     assert checks['RESEND_API_KEY'].status == checks['MAIL_FROM'].status == 'CONFIGURADO'
     assert 'sin comprobar' in checks['MAIL_FROM'].message
+
+
+def mail_configuration(configured):
+    return configured | {
+        'PUBLIC_BASE_URL': 'https://empleos.pruebas.ar',
+        'RESEND_API_KEY': 'clave-ficticia-no-consultar',
+        'MAIL_FROM': 'PRUEBA <avisos@pruebas.ar>',
+        'RESEND_WEBHOOK_SECRET': 'whsec_' + base64.b64encode(b'PRUEBA-clave-ficticia-solo-local').decode(),
+        'MAIL_ENABLED': '1',
+    }
+
+
+@pytest.mark.parametrize('enabled', [None, '', '0', 'true', 1, True, ' 1', '1 '])
+def test_mail_credentials_do_not_enable_delivery_without_explicit_flag(configured, enabled, monkeypatch):
+    from salta_emplea import mailer
+    monkeypatch.setattr(mailer, 'urlopen', lambda *_args, **_kwargs: pytest.fail('Diagnóstico sin red.'))
+    settings = mail_configuration(configured) | {'MAIL_ENABLED': enabled}
+    checks = by_name(check_production(settings))
+    assert checks['RESEND_API_KEY'].status == checks['MAIL_FROM'].status == 'CONFIGURADO'
+    assert checks['MAIL_ENABLED'].status == checks['MAIL_DELIVERY'].status == 'PAUSADO'
+    assert not any(check.failed for check in checks.values())
+
+
+@pytest.mark.parametrize('changes', [
+    {'RESEND_WEBHOOK_SECRET': ''}, {'RESEND_WEBHOOK_SECRET': 'whsec_no-base64'},
+    {'MAIL_DAILY_LIMIT': '0'}, {'MAIL_MONTHLY_LIMIT': 'inválido'},
+])
+def test_mail_explicitly_enabled_but_incomplete_is_pending(configured, changes):
+    checks = by_name(check_production(mail_configuration(configured) | changes))
+    assert checks['MAIL_ENABLED'].status == 'HABILITADO'
+    assert checks['MAIL_DELIVERY'].status == 'PENDIENTE'
+    assert not checks['MAIL_DELIVERY'].failed
+
+
+def test_prepared_mail_diagnostic_never_claims_external_verification(configured, monkeypatch):
+    from salta_emplea import mailer
+    monkeypatch.setattr(mailer, 'urlopen', lambda *_args, **_kwargs: pytest.fail('Diagnóstico sin red.'))
+    settings = mail_configuration(configured)
+    checks = by_name(check_production(settings))
+    assert checks['MAIL_DELIVERY'].status == 'PREPARADO'
+    assert checks['RESEND_WEBHOOK_SECRET'].status == 'CONFIGURADO'
+    assert 'DNS, proveedor y recepción sin comprobar' in checks['MAIL_DELIVERY'].message
+    assert 'no se envió ningún mensaje' in checks['MAIL_DELIVERY'].message
+    rendered = repr(checks)
+    for key in ('RESEND_API_KEY', 'MAIL_FROM', 'RESEND_WEBHOOK_SECRET'):
+        assert settings[key] not in rendered
 
 
 class ReadOnlyConnection:

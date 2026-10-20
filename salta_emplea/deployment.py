@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import re
 from urllib.parse import urlsplit
 
+from . import mailer
+
 
 _TABLES = frozenset({
     'schema_migrations', 'jobs', 'provenance', 'sources', 'reports',
@@ -166,6 +168,22 @@ def check_production(config, *, with_crons=False, check_database=False):
         checks.append(Check(name, 'CONFIGURADO' if mail_configured else 'PENDIENTE',
             'Par de correo presente; proveedor sin comprobar. No se envió ningún mensaje.' if mail_configured else
             'Correo opcional pendiente: requiere RESEND_API_KEY y MAIL_FROM juntos.'))
+    # Este comando evalúa la preparación para producción, no inicia la app ni
+    # cambia su entorno. La presencia de variables no acredita el servicio.
+    mail_state = mailer.delivery_readiness(dict(config, APP_ENV='production'))
+    missing = {item['key']: item['message'] for item in mail_state['missing']}
+    enabled = config.get('MAIL_ENABLED') == '1'
+    checks.append(Check('MAIL_ENABLED', 'HABILITADO' if enabled else 'PAUSADO',
+        'Habilitación local explícita; no demuestra una entrega.' if enabled else
+        'Envíos pausados; cargar credenciales no habilita el correo por sí solo.'))
+    checks.append(Check('RESEND_WEBHOOK_SECRET', 'PENDIENTE' if 'webhook' in missing else 'CONFIGURADO',
+        missing.get('webhook', 'Formato local de firma válido; conexión y eventos reales sin comprobar.')))
+    state = 'PREPARADO' if mail_state['ready'] else 'PENDIENTE' if enabled else 'PAUSADO'
+    checks.append(Check('MAIL_DELIVERY', state,
+        'Preparación local completa. DNS, proveedor y recepción sin comprobar; no se envió ningún mensaje.'
+        if mail_state['ready'] else
+        ' '.join(item['message'] for item in mail_state['missing']) +
+        ' DNS, proveedor y recepción sin comprobar; no se envió ningún mensaje.'))
     if check_database:
         if _postgres_url(_value(config, 'DATABASE_URL')):
             checks.extend(_database_checks(_value(config, 'DATABASE_URL')))

@@ -163,6 +163,7 @@ def test_pending_mail_is_cancelled_after_material_source_change(conn, monkeypatc
     monkeypatch.setattr(mailer, "urlopen", no_network)
     result = mailer.send_outbox(conn, {
         "APP_ENV": "production", "RESEND_API_KEY": "clave-ficticia",
+        "MAIL_ENABLED": "1", "RESEND_WEBHOOK_SECRET": "whsec_cHJ1ZWJhLWZpY3RpY2lhLW5vLXNlY3JldG8=",
         "MAIL_FROM": "Alertas <alertas@salta-pruebas.ar>",
         "PUBLIC_BASE_URL": base_url, "SECRET_KEY": secret_key,
     })

@@ -140,6 +140,12 @@ def run_circuit(browser, viewport):
             page.goto(origin + '/admin/ingresar')
             page.locator('[name="password"]').fill(PASSWORD)
             page.get_by_role('button', name='Ingresar').click()
+            for setup_path in ('/admin/configuracion', '/admin/automatizacion'):
+                assert page.goto(origin + setup_path).status == 200
+                expect(page.get_by_role('heading', name='Preparar alertas por correo', exact=True)).to_be_visible()
+                expect(page.get_by_text('El envío de correo está pausado.', exact=True)).to_be_visible()
+                no_horizontal_overflow(page)
+            page.goto(origin + '/admin')
             expect(page.get_by_role('heading', name='Ofertas y actividad')).to_be_visible()
             no_horizontal_overflow(page)
             page.get_by_role('link', name=TITLE, exact=True).click()

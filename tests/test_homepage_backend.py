@@ -237,7 +237,7 @@ def test_preview_and_mail_flags_match_actual_configuration(app):
 
 
 def test_development_credentials_only_expose_an_inert_available_mail_route(app):
-    app.config.update(RESEND_API_KEY='PRUEBA-no-real', MAIL_FROM='PRUEBA <prueba@example.test>')
+    app.config.update(MAIL_ENABLED='1', RESEND_API_KEY='PRUEBA-no-real', MAIL_FROM='PRUEBA <prueba@example.test>')
     with rendered(app) as contexts:
         response = app.test_client().get('/')
     assert response.status_code == 200

@@ -481,7 +481,7 @@ def test_configured_subscription_queues_only_one_confirmation_without_network(cl
         pytest.fail("Suscribirse sólo debe preparar la bandeja; no enviar correos desde HTTP.")
 
     monkeypatch.setattr(mailer, "urlopen", forbidden_network)
-    app.config.update(RESEND_API_KEY="valor-ficticio-solo-test", MAIL_FROM="pruebas@example.org")
+    app.config.update(MAIL_ENABLED="1", RESEND_API_KEY="valor-ficticio-solo-test", MAIL_FROM="pruebas@example.org")
     data = {"email": "PRUEBA@example.org", "frequency": "daily", "location": "Orán", "sector": "Tecnología", "modality": "remota", "consent": "1"}
     for _ in range(2):
         assert post(client, "/alertas", data).status_code == 200

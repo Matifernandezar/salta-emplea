@@ -31,7 +31,7 @@
 <div><dt>Base de datos conectada</dt><dd>{{ database_type }}. La lectura de esta página consultó la base real.</dd></div>
 <div><dt>Credencial de correo</dt><dd>{{ 'Presente' if mail_key_present else 'Pendiente' }}</dd></div>
 <div><dt>Remitente de correo</dt><dd>{{ 'Configurado' if mail_sender_present else 'Pendiente' }}</dd></div>
-<div><dt>Envío de correo</dt><dd>{% if mail_ready %}La configuración permite intentar envíos. No confirma la validez de la credencial, la autorización del remitente ni la entrega.{% else %}Deshabilitado por configuración incompleta o entorno de desarrollo. No se envían correos.{% endif %}</dd></div>
+<div><dt>Envío de correo</dt><dd>{% if mail_ready %}La configuración permite intentar envíos. No confirma la validez de la credencial, la autorización del remitente ni la entrega.{% else %}Pausado o pendiente de configuración. No se envían correos.{% endif %}</dd></div>
 <div><dt>Recepción de rebotes y quejas</dt><dd>{{ 'Clave de firma presente; falta comprobar la conexión y un evento real.' if mail_webhook_ready else 'Pendiente de configurar la clave de firma y los eventos en el proveedor.' }}</dd></div>
 {% if mail_quota is defined %}{% for period,label in [('daily','día UTC'),('monthly','mes UTC')] %}
 {% set quota = mail_quota[period] %}
@@ -56,6 +56,7 @@
 {% endfor %}
 </section>
 </div>
+{% include '_mail_setup.html' %}
 <section class="admin-section">
 <h2>Fuentes y últimos resultados</h2>
 <p><a class="text-link" href="{{ url_for('admin_sources') }}">Revisar permisos y administrar fuentes →</a></p>

@@ -82,7 +82,7 @@ def test_status_distinguishes_configuration_from_scheduler_evidence(admin, app, 
     assert 'SQLite' in text
     assert 'No hay evidencia de llamadas autenticadas al cron' in text
     assert 'no demuestra que el programador' in text
-    assert 'Deshabilitado por configuración incompleta o entorno de desarrollo' in text
+    assert 'Pausado o pendiente de configuración' in text
     for private in ('no-mostrar-cron', 'no-mostrar-api', 'remitente-privado', 'usuario:clave'):
         assert private not in text
     assert response.headers['Cache-Control'] == 'no-store'

@@ -5,6 +5,8 @@ ambigua queda en ``uncertain`` para revisión humana: nunca se reintenta a ciega
 Las credenciales, los tokens y los cuerpos de los correos no se registran.
 """
 
+import base64
+import binascii
 import hashlib
 import hmac
 import ipaddress
@@ -325,12 +327,7 @@ def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None):
     return counters
 
 
-def _valid_delivery_config(config):
-    """Falla de forma cerrada: modo development y dominios de prueba no envían."""
-    if str(config.get("APP_ENV", "development")).lower() != "production":
-        return False
-    if not config.get("RESEND_API_KEY") or not config.get("SECRET_KEY"):
-        return False
+def _valid_sender(config):
     sender = str(config.get("MAIL_FROM") or "")
     address = parseaddr(sender)[1]
     if "\r" in sender or "\n" in sender or "@" not in address or "." not in address.rsplit("@", 1)[1]:
@@ -338,6 +335,10 @@ def _valid_delivery_config(config):
     sender_domain = address.rsplit("@", 1)[1].lower()
     if sender_domain == "resend.dev" or sender_domain.endswith((".resend.dev", ".test", ".invalid", ".example", ".localhost", ".local")) or sender_domain in {"example.com", "example.org", "example.net"}:
         return False
+    return True
+
+
+def _valid_delivery_origin(config):
     try:
         parsed = urlsplit(_base_url(config.get("PUBLIC_BASE_URL")))
         host = (parsed.hostname or "").lower()
@@ -355,6 +356,50 @@ def _valid_delivery_config(config):
             return True
     except ValueError:
         return False
+
+
+def _valid_webhook_secret(value):
+    """Mismo formato Svix que verifica mail_webhooks, sin importar su blueprint."""
+    if not isinstance(value, str) or not value.startswith("whsec_") or len(value) > 200:
+        return False
+    try:
+        return 16 <= len(base64.b64decode(value.removeprefix("whsec_"), validate=True)) <= 64
+    except (ValueError, binascii.Error):
+        return False
+
+
+def delivery_readiness(config):
+    """Estado local de preparación sin revelar valores ni consultar al proveedor.
+
+    Habilitar exige una decisión explícita; cargar credenciales por sí solo no
+    inicia envíos. La verificación real de DNS y recepción se realiza aparte.
+    La cuota ya consumida no cambia este estado: se comprueba al reservar cada
+    intento y conserva los pendientes cuando falta capacidad.
+    """
+    missing = []
+    checks = (
+        ("pausado", config.get("MAIL_ENABLED") == "1", "El envío de correo está pausado."),
+        ("entorno", str(config.get("APP_ENV", "development")).lower() == "production",
+         "La entrega requiere el entorno de producción."),
+        ("url", _valid_delivery_origin(config), "Falta una URL pública HTTPS válida."),
+        ("clave_app", bool(config.get("SECRET_KEY")), "Falta la configuración privada de firma de la aplicación."),
+        ("api", bool(config.get("RESEND_API_KEY")), "Falta la clave privada de envío del proveedor."),
+        ("remitente", _valid_sender(config), "Falta un remitente válido de un dominio propio."),
+        ("webhook", _valid_webhook_secret(config.get("RESEND_WEBHOOK_SECRET")),
+         "Falta un secreto válido para recibir rebotes y quejas del proveedor."),
+        ("limites", _limit(config, "MAIL_DAILY_LIMIT", DEFAULT_DAILY_LIMIT) > 0
+         and _limit(config, "MAIL_MONTHLY_LIMIT", DEFAULT_MONTHLY_LIMIT) > 0,
+         "Los límites diarios y mensuales deben ser positivos."),
+    )
+    for key, valid, message in checks:
+        if not valid:
+            missing.append({"key": key, "message": message})
+    return {"ready": not missing, "missing": missing}
+
+
+def _valid_delivery_config(config):
+    """Falla cerrada mientras el envío esté pausado o incompleto."""
+    return delivery_readiness(config)["ready"]
 
 
 def _cancel(conn, outbox_id, reason):
@@ -429,8 +474,11 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
     con la misma clave durante menos de 24 horas y hasta tres intentos.
     """
     counters = _counts()
-    if not _valid_delivery_config(config):
+    readiness = delivery_readiness(config)
+    if not readiness["ready"]:
         counters["skipped"] = conn.execute("SELECT count(*) FROM outbox WHERE status='pending'").fetchone()[0]
+        if any(item["key"] == "limites" for item in readiness["missing"]):
+            counters["quota_reached"] = True
         return counters
     # No enviar mientras el llamador conserva cambios sin confirmar.
     if conn.in_transaction:
