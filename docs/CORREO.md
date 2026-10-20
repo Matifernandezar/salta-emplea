@@ -6,6 +6,12 @@ Estado de esta fase, 20/10/2026: el circuito de consentimiento, la bandeja persi
 
 El formulario de producción permanece cerrado mientras falten datos públicos válidos del responsable y contacto, o la configuración del remitente no sea apta. No registra direcciones en ese estado. La baja revoca el enlace de confirmación anterior; una nueva solicitud genera otro token. Una confirmación incierta se concilia antes de preparar otra.
 
+## Validación de la preparación, 20/10/2026
+
+Código comprobado: `bede5e7dd565ada1a5f7b858dd0da701dd5dd3b0`. [CI PostgreSQL](https://github.com/Matifernandezar/salta-emplea/actions/runs/39451555630): 859 pruebas aprobadas. [Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39451556782): circuito aprobado, incluidos los paneles privados de configuración y automatización en celular y escritorio, sin desplazamiento horizontal.
+
+Las pruebas sustituyen al proveedor y comprueban pausa explícita, preservación de cola e intentos, bloqueo del alta pública mientras falta configuración, reintentos, baja y recepción de webhooks. El secreto de webhook se valida solo por formato; eso no acredita conexión. Se dejó el indicador de envío deshabilitado en la configuración de Production. No se crearon cuentas, claves, registros DNS inventados ni correos reales. La verificación externa pendiente sigue siendo dominio, permisos, evento firmado y recepción confirmada por un destinatario autorizado.
+
 ## Primer paso del titular: crear la cuenta
 
 1. Abrir https://resend.com/signup, crear la cuenta y confirmar el correo de acceso. Ese correo es privado de la cuenta; no se convierte en contacto público del sitio.
