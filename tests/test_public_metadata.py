@@ -9,6 +9,13 @@ from salta_emplea import db, domain, public_metadata
 from salta_emplea.app import create_app
 
 
+GUIDE_URLS = [
+    'https://empleos.example.org/guias/cv-sin-experiencia',
+    'https://empleos.example.org/guias/como-postularse',
+    'https://empleos.example.org/guias/ofertas-laborales-falsas',
+]
+
+
 class Head(HTMLParser):
     def __init__(self, response):
         super().__init__()
@@ -118,7 +125,7 @@ def test_job_metadata_uses_only_approved_public_fields_and_escapes_markup(app, c
 def test_sitemap_omits_pending_closed_and_materially_changed_jobs(app, conn):
     client = app.test_client()
     job_id = create_job(conn)
-    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/', *GUIDE_URLS]
     assert client.get(f'/ofertas/{job_id}').status_code == 404
     domain.transition_job(conn, job_id, 'approve', actor='administrador')
     location = f'https://empleos.example.org/ofertas/{job_id}'
@@ -142,7 +149,7 @@ def test_closed_job_is_removed_from_sitemap_and_detail(app, conn, action):
     job_id = create_job(conn, approved=True)
     domain.transition_job(conn, job_id, action, actor='administrador')
     client = app.test_client()
-    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/', *GUIDE_URLS]
     assert client.get(f'/ofertas/{job_id}').status_code == 404
 
 
@@ -165,7 +172,7 @@ def test_legal_identity_remains_pending_until_real_config_is_supplied(app):
     assert 'mailto:contacto@example.org' in response.get_data(as_text=True)
     assert set(sitemap_locations(client.get('/sitemap.xml'))) == {
         'https://empleos.example.org/', 'https://empleos.example.org/privacidad',
-        'https://empleos.example.org/condiciones'}
+        'https://empleos.example.org/condiciones', *GUIDE_URLS}
 
 
 def test_invalid_contact_never_becomes_an_injected_mailto():
@@ -287,7 +294,7 @@ def test_profile_contact_completes_legal_pages_without_personal_email_or_phone(a
     assert 'contactá al responsable por su perfil de LinkedIn' in client.get('/privacidad').get_data(as_text=True)
     assert set(sitemap_locations(client.get('/sitemap.xml'))) == {
         'https://empleos.example.org/', 'https://empleos.example.org/privacidad',
-        'https://empleos.example.org/condiciones'}
+        'https://empleos.example.org/condiciones', *GUIDE_URLS}
 
 
 def test_missing_profile_is_not_invented_from_responsible_name_or_sender(app):
@@ -300,7 +307,7 @@ def test_missing_profile_is_not_invented_from_responsible_name_or_sender(app):
     assert 'Información preliminar' in response.get_data(as_text=True)
     assert 'Pendiente de informar' in response.get_data(as_text=True)
     assert Head(response).meta['robots'] == 'noindex, follow'
-    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/', *GUIDE_URLS]
 
 
 def test_rejected_profile_never_leaks_its_query_or_changes_indexability(app):
@@ -312,7 +319,7 @@ def test_rejected_profile_never_leaks_its_query_or_changes_indexability(app):
     assert 'secreto-no-publicar' not in html
     assert 'Perfil de LinkedIn del responsable' not in html
     assert Head(response).meta['robots'] == 'noindex, follow'
-    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/']
+    assert sitemap_locations(client.get('/sitemap.xml')) == ['https://empleos.example.org/', *GUIDE_URLS]
 
 
 def test_email_contact_api_remains_compatible_and_profile_needs_responsible_name():
@@ -356,3 +363,46 @@ def test_missing_public_origin_omits_canonicals_and_refuses_fake_sitemap(app):
     assert Head(response).meta['robots'] == 'noindex, follow'
     assert client.get('/sitemap.xml').status_code == 503
     assert 'Sitemap:' not in client.get('/robots.txt').get_data(as_text=True)
+
+
+@pytest.mark.parametrize('slug', ['cv-sin-experiencia', 'como-postularse', 'ofertas-laborales-falsas'])
+def test_guides_are_readable_canonical_and_discovered_without_job_markup(app, slug):
+    client = app.test_client()
+    response = client.get('/guias/' + slug)
+    assert response.status_code == 200
+    head = Head(response)
+    expected = 'https://empleos.example.org/guias/' + slug
+    assert head.canonicals == [expected]
+    assert 'robots' not in head.meta
+    assert 'X-Robots-Tag' not in response.headers
+    html = response.get_data(as_text=True)
+    assert html.count('<h1>') == 1
+    assert '20/10/2026' in html
+    assert 'JobPosting' not in html and 'application/ld+json' not in html
+    assert expected in sitemap_locations(client.get('/sitemap.xml'))
+    assert 'href="/guias/' + slug + '"' in client.get('/').get_data(as_text=True)
+    assert "script-src 'none'" in response.headers['Content-Security-Policy']
+
+
+def test_unknown_guide_is_not_a_fake_page_or_sitemap_entry(app):
+    client = app.test_client()
+    response = client.get('/guias/PRUEBA-no-existe')
+    assert response.status_code == 404
+    assert not Head(response).canonicals
+    assert 'PRUEBA-no-existe' not in client.get('/sitemap.xml').get_data(as_text=True)
+
+
+def test_home_metadata_and_paused_mail_match_the_visible_primary_action(app):
+    response = app.test_client().get('/')
+    html = response.get_data(as_text=True)
+    head = Head(response)
+    title = 'Trabajo en Salta y ofertas de empleo | Salta Emplea'
+    assert '<title>' + title + '</title>' in html
+    assert head.meta['og:title'] == title
+    assert html.count('<h1') == 1 and 'Encontrá trabajo en Salta.' in html
+    assert 'Buscar empleos' in html and 'role="search"' in html
+    assert 'Las alertas están en pausa' in html
+    assert 'Crear una alerta' not in html
+    assert 'Avisame cuando haya oportunidades' not in html
+    assert 'Sin cuenta en Salta Emplea' in html
+    assert 'Portal independiente de organismos públicos' in html

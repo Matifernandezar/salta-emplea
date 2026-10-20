@@ -1,0 +1,30 @@
+{
+  "fecha_utc": "2026-10-20T06:01:02Z",
+  "commit_codigo": "88df9a06c69ece0d05e3bb7b343fbf8c9f69a3ef",
+  "pr": "https://github.com/Matifernandezar/salta-emplea/pull/1",
+  "postgresql": {
+    "estado": "aprobado",
+    "pruebas_aprobadas": 793,
+    "omitidas": 0,
+    "workflow": "https://github.com/Matifernandezar/salta-emplea/actions/runs/39377850641"
+  },
+  "chromium": {
+    "estado": "aprobado",
+    "anchos_px": [360, 390, 768, 1024, 1440],
+    "workflow": "https://github.com/Matifernandezar/salta-emplea/actions/runs/39377850681",
+    "entorno": "base temporal y avisos PRUEBA aislados",
+    "postulacion": "destino ficticio interceptado; sin candidatura real",
+    "recorrido": ["buscar", "filtrar", "quitar un filtro", "abrir ficha", "abrir destino de postulación simulado", "leer guías", "cero resultados", "inventario vacío", "error de parámetros", "oferta cerrada sin postulación"],
+    "inspeccion_visual": ["portada-390.png", "portada-1440.png", "filtros-390.png", "guia-cv-390.png"],
+    "artefacto": "capturas-publicas",
+    "retencion_artefacto_dias": 3
+  },
+  "limites": [
+    "Chromium no pudo iniciarse en el sandbox local; las pruebas de navegador se ejecutaron en GitHub Actions.",
+    "Vercel Preview no dispone de DATABASE_URL PostgreSQL aislada y su build falló; no hay URL de revisión operativa.",
+    "No se fusionó main ni se desplegó esta portada en producción.",
+    "No se editaron ni aprobaron ofertas de producción.",
+    "Correo y Google Vision permanecen en pausa.",
+    "No se midieron Core Web Vitals de usuarios ni indexación real."
+  ]
+}

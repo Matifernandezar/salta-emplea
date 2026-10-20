@@ -5,6 +5,7 @@ on:
     paths:
       - 'salta_emplea/**'
       - 'scripts/browser_check.py'
+      - 'scripts/check_homepage.py'
       - 'tests/**'
       - 'requirements*.txt'
       - 'vista-previa/**'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'salta_emplea/**'
       - 'scripts/browser_check.py'
+      - 'scripts/check_homepage.py'
       - 'tests/**'
       - 'requirements*.txt'
       - 'vista-previa/**'
@@ -40,11 +42,19 @@ jobs:
           .venv-navegador/bin/python -m playwright install --with-deps chromium
       - name: Probar circuito local en celular y escritorio
         run: .venv-navegador/bin/python scripts/browser_check.py --check-public
+      - name: Probar portada aislada en cinco anchos y preparar revisión visual
+        if: always()
+        # Las imágenes exportadas usan únicamente fixtures PRUEBA locales.
+        # Ejecutar esta comprobación independiente no oculta fallos del circuito anterior.
+        run: .venv-navegador/bin/python scripts/check_homepage.py --emit-preview
       - name: Conservar solo capturas públicas
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: capturas-publicas
-          path: /tmp/salta-qa-capturas/*.png
+          path: |
+            /tmp/salta-qa-capturas/*.png
+            docs/portada/capturas/*.png
+            docs/portada/resultados-navegador.json
           retention-days: 3
           if-no-files-found: ignore

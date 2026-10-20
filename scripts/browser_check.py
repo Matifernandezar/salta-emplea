@@ -5,6 +5,7 @@ from io import BytesIO
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
@@ -73,6 +74,13 @@ def no_horizontal_overflow(page):
     )
 
 
+def open_search_filters(page):
+    """Los filtros avanzados son un details nativo, accesible sin JavaScript."""
+    details = page.locator('details.search-extra')
+    if details.count() and not details.evaluate('(node) => node.open'):
+        details.locator('summary').click()
+
+
 def run_circuit(browser, viewport):
     with isolated_server() as (app, origin):
         context = browser.new_context(viewport=viewport, is_mobile=viewport['width'] < 600,
@@ -98,7 +106,7 @@ def run_circuit(browser, viewport):
         try:
             page = context.new_page()
             assert page.goto(origin + '/').status == 200
-            expect(page.get_by_role('heading', level=1)).to_contain_text('Tu próximo trabajo')
+            expect(page.get_by_role('heading', level=1)).to_have_text('Encontrá trabajo en Salta.')
             page.screenshot(path=str(CAPTURES / f'local-publica-{viewport["width"]}.png'), full_page=True)
             no_horizontal_overflow(page)
             page.goto(origin + '/admin')
@@ -146,19 +154,20 @@ def run_circuit(browser, viewport):
 
             public.goto(origin + '/')
             public.locator('[name="q"]').fill('atención')
+            open_search_filters(public)
             for name, value in {
                 'location': 'Salta Capital', 'sector': 'Comercio',
                 'modality': 'presencial', 'schedule': 'Jornada completa', 'days': '7',
             }.items():
                 public.locator(f'[name="{name}"]').select_option(value)
-            public.get_by_role('button', name='Buscar ofertas').click()
+            public.get_by_role('button', name='Buscar empleos', exact=True).click()
             expect(public.get_by_role('link', name=TITLE, exact=True)).to_be_visible()
             no_horizontal_overflow(public)
             public.locator('[name="modality"]').select_option('remota')
-            public.get_by_role('button', name='Buscar ofertas').click()
+            public.get_by_role('button', name='Buscar empleos', exact=True).click()
             expect(public.get_by_role('link', name=TITLE, exact=True)).to_have_count(0)
             public.locator('[name="modality"]').select_option('presencial')
-            public.get_by_role('button', name='Buscar ofertas').click()
+            public.get_by_role('button', name='Buscar empleos', exact=True).click()
             public.get_by_role('link', name=TITLE, exact=True).click()
             apply = public.get_by_role('link', name='Postularme')
             expect(apply).to_have_attribute('href', APPLICATION)
@@ -412,10 +421,14 @@ def check_public_backend(context, page, origin):
     response = context.request.get(origin + '/salud', timeout=20000)
     assert response.status == 200, f'Salud del backend: HTTP {response.status}'
     assert response.json() == {'status': 'ok'}, 'La comprobación SQL no confirmó salud.'
-    expect(page.get_by_role('heading', level=1)).to_contain_text('Tu próximo trabajo')
+    # La producción puede conservar la portada anterior mientras se revisa una
+    # rama. El circuito local y check_homepage exigen el diseño nuevo exacto.
+    expect(page.get_by_role('heading', level=1)).to_contain_text(
+        re.compile(r'Encontrá trabajo en Salta|Tu próximo trabajo'))
 
     filters = {'q': 'salta', 'modality': 'remota', 'days': '7'}
     page.locator('[name="q"]').fill(filters['q'])
+    open_search_filters(page)
     for name in ('location', 'sector', 'schedule'):
         values = page.locator(f'select[name="{name}"] option').evaluate_all(
             '(options) => options.map(option => option.value).filter(Boolean)')
@@ -425,7 +438,7 @@ def check_public_backend(context, page, origin):
         if name != 'q':
             page.locator(f'[name="{name}"]').select_option(value)
     with page.expect_navigation() as navigation:
-        page.get_by_role('button', name='Buscar ofertas').click()
+        page.get_by_role('button', name=re.compile(r'^Buscar (empleos|ofertas)')).click()
     assert navigation.value.status == 200
     query = parse_qs(urlsplit(page.url).query, keep_blank_values=True)
     assert all(query.get(name) == [value] for name, value in filters.items())

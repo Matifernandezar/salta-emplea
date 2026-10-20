@@ -13,3 +13,5 @@ backups/
 *.log
 .vercel/
 public/
+docs/portada/capturas/
+docs/portada/resultados-navegador.json

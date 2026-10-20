@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block document_title %}{{ page_meta.title }}{% endblock %}
+{% block body_class %}page-guide{% endblock %}
+{% block content %}
+<div class="container narrow section-space">
+  <nav class="breadcrumbs" aria-label="Ruta de navegación"><a href="{{ url_for('index') }}">Inicio</a><span aria-hidden="true">/</span><a href="{{ url_for('index', _anchor='guias') }}">Guías útiles</a></nav>
+  <article class="guide-article">
+    <p class="eyebrow guide-kicker">Orientación para postularte</p>
+    <h1>{{ guide.title }}</h1>
+    <p class="lead">{{ guide.intro }}</p>
+    {% for section in guide.sections %}<section class="guide-section"><h2>{{ section.title }}</h2>{% for paragraph in section.paragraphs|default([]) %}<p>{{ paragraph }}</p>{% endfor %}{% if 'items' in section %}<ul>{% for item in section['items'] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}{% if section.example %}<blockquote class="guide-example"><p>{{ section.example }}</p></blockquote>{% endif %}</section>{% endfor %}
+    <p class="small guide-review">Contenido propio de Salta Emplea. Revisión editorial: 20/10/2026. Es orientación general; las condiciones de cada empleador están en su aviso.</p>
+  </article>
+  <a class="button" href="{{ url_for('index', _anchor='ofertas') }}">Buscar ofertas de empleo <span aria-hidden="true">→</span></a>
+  <aside class="guide-related" aria-label="Otras guías"><h2>Seguí preparando tu búsqueda</h2>{% for related in related_guides %}<p><a href="{{ url_for('guide_detail', slug=related.slug) }}">{{ related.title }}</a></p>{% endfor %}</aside>
+</div>
+{% endblock %}

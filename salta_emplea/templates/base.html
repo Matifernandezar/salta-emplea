@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123e49">
+  <meta name="theme-color" content="#173B2C">
   <meta name="description" content="{{ page_meta.description }}">
   {% if not page_meta.indexable %}<meta name="robots" content="noindex, follow">{% endif %}
   {% if page_meta.canonical %}
@@ -18,11 +18,12 @@
   <meta name="twitter:title" content="{{ page_meta.title }}">
   <meta name="twitter:description" content="{{ page_meta.description }}">
   {% endif %}
-  <title>{% block title %}Trabajo en Salta{% endblock %} · Salta Emplea</title>
+  <title>{% block document_title %}{% block title %}Trabajo en Salta{% endblock %} · Salta Emplea{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <a class="skip-link" href="#contenido">Ir al contenido</a>
+  {% if preview_mode %}<div class="preview-banner" role="note">Vista local de desarrollo. Los avisos PRUEBA son ejemplos y no admiten postulaciones reales.</div>{% endif %}
   <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="{{ url_for('index') }}" aria-label="Salta Emplea, inicio">
@@ -35,10 +36,11 @@
 </span>
       </a>
       <nav class="main-nav" aria-label="Navegación principal">
-        <a href="{{ url_for('index') }}"{% if request.endpoint == 'index' %} aria-current="page"{% endif %}>Buscar trabajo</a>
-        <a href="{{ url_for('subscribe') }}"{% if request.endpoint == 'subscribe' %} aria-current="page"{% endif %}>Recibir alertas</a>
-        <a class="button button-small button-outline" href="{{ url_for('submit_job') }}">Compartir una oferta</a>
+        <a href="{{ url_for('index', _anchor='buscar') }}"{% if request.endpoint == 'index' %} aria-current="page"{% endif %}>Buscar empleo</a>
+        <a href="{{ url_for('index', _anchor='rubros') }}">Rubros</a>
+        <a href="{{ url_for('index', _anchor='guias') }}">Guías útiles</a>
       </nav>
+      <a class="button button-small button-outline header-publish" href="{{ url_for('submit_job') }}">Publicar oferta</a>
     </div>
   </header>
   <main id="contenido">
@@ -53,12 +55,14 @@
     <div class="container footer-inner">
       <div>
 <a class="footer-brand" href="{{ url_for('index') }}">Salta Emplea</a>
-<p>Un punto de encuentro para el trabajo en Salta.</p>
-<p class="small">Nombre provisional. La marca y el dominio requieren verificación.</p>
+<p>Ofertas y orientación para buscar trabajo desde Salta.</p>
+<p class="small">Portal independiente de organismos públicos. Nombre provisional; registro de marca sin verificar.</p>
 </div>
       <div>
 <p>Centralizamos avisos de distintas fuentes. No garantizamos contratación.</p>
-<nav class="footer-nav" aria-label="Información">
+<nav class="footer-nav footer-links" aria-label="Información">
+<a href="{{ url_for('index', _anchor='como-funciona') }}">Cómo funciona</a>
+{% if legal_identity.url %}<a href="{{ legal_identity.url }}" rel="noopener noreferrer" target="_blank">Contacto en LinkedIn</a>{% elif legal_identity.email %}<a href="{{ legal_identity.mailto }}">Contacto</a>{% else %}<a href="{{ url_for('privacy') }}">Contacto y privacidad</a>{% endif %}
 <a href="{{ url_for('privacy') }}">Privacidad</a>
 <a href="{{ url_for('terms') }}">Condiciones</a>
 <a href="{{ url_for('admin') }}">Panel de administración</a>

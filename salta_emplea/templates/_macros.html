@@ -4,26 +4,23 @@
 {%- endmacro %}
 
 {% macro job_card(job) -%}
-  <article class="job-card">
-    <div class="job-card-top">
-<span class="eyebrow">{{ job.sector|value }}</span>
-<span class="badge badge-modality">{{ job.modality|value }}</span>
-</div>
-    <h3>
+  <article class="job-card" aria-labelledby="job-title-{{ job.id }}">
+    <div class="job-info-head"><div><h3 id="job-title-{{ job.id }}">
 <a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a>
 </h3>
-    <p class="company">{{ job.company|value }}</p>
+    <p class="company">{{ job.company|value }}</p></div><span class="badge badge-modality">{{ job.modality|value }}</span></div>
     <ul class="job-meta" aria-label="Datos del empleo">
 <li>
 <span aria-hidden="true">⌖</span> {{ job.location|value }}</li>
 <li>{{ job.schedule|value }}</li>
 <li>{{ job.contract_type|value }}</li>
 </ul>
+    <div class="job-card-top">{% if job.sector %}<span class="eyebrow">{{ job.sector }}</span>{% endif %}<span class="job-status">Publicada</span></div>
     {% if job.salary_amount %}<p class="salary">{{ job.salary_currency|value }} {{ job.salary_amount }} <span>/ {{ job.salary_period|value }}</span>
 </p>{% endif %}
     <div class="job-card-bottom">
-<span>Incorporada {{ job.collected_at|date }}</span>
-<a class="text-link" href="{{ url_for('job_detail', job_id=job.id) }}">Ver oferta <span aria-hidden="true">↗</span>
+<span>Incorporada <time datetime="{{ job.collected_at }}">{{ job.collected_at|date }}</time></span>
+<a class="text-link" href="{{ url_for('job_detail', job_id=job.id) }}" aria-label="Ver oferta: {{ job.title }}">Ver oferta <span aria-hidden="true">↗</span>
 </a>
 </div>
   </article>
@@ -32,7 +29,7 @@
 {% macro ad_card(ad) -%}
   <aside class="ad-card" aria-label="Publicidad">
 <span class="ad-label">Publicidad</span>
-<a href="{{ ad.link_url }}" rel="noopener noreferrer sponsored" target="_blank">{% if ad.image_url %}<img src="{{ ad.image_url }}" alt="{{ ad.label|default('Anuncio de un negocio local') }}" loading="lazy">{% endif %}<span>{{ ad.label|default('Conocé este negocio local') }}</span>
+<a href="{{ ad.link_url }}" rel="noopener noreferrer sponsored" target="_blank">{% if ad.image_url %}<img src="{{ ad.image_url }}" alt="{{ ad.label|default('Anuncio de un negocio local') }}" width="640" height="360" loading="lazy" decoding="async">{% endif %}<span>{{ ad.label|default('Conocé este negocio local') }}</span>
 </a>
 </aside>
 {%- endmacro %}
