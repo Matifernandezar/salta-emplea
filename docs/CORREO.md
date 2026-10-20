@@ -1,18 +1,20 @@
 # Alertas por correo
 
-**En pausa por decisión del titular, 19/10/2026:** priorizar la web en saltaemplea.com. Hasta que indique retomar, no solicitar cuentas ni credenciales, configurar envíos ni realizar pruebas de correo; las instrucciones siguientes se conservan para esa etapa.
+**Preparación retomada por el titular, 20/10/2026:** pidió una guía para conectar el correo. Todavía no hay cuenta, remitente ni credenciales Resend configurados en Production, según la consulta de metadatos sin secretos. Se puede preparar cuenta y DNS; no se autorizó un destinatario ni se enviaron pruebas reales. Los envíos continúan pausados hasta completar la configuración y acordar esa prueba.
 
-Estado de esta fase, 19/10/2026: el circuito de consentimiento, la bandeja persistente, los límites y la recepción firmada de supresiones están implementados y probados con datos locales y proveedor sustituido. **No se enviaron correos reales en esta fase.** El dominio web saltaemplea.com ya tiene DNS y HTTPS verificados. Faltan la cuenta Resend, verificación específica del dominio para enviar correo, remitente, configuración privada y autorización de un destinatario para comprobar recepción. La configuración por sí sola no demuestra entrega.
+Estado de esta fase, 20/10/2026: el circuito de consentimiento, la bandeja persistente, los límites y la recepción firmada de supresiones están implementados y probados con datos locales y proveedor sustituido. **No se enviaron correos reales en esta fase.** El dominio web saltaemplea.com ya tiene DNS y HTTPS verificados; sus servidores DNS están en Vercel. Faltan la cuenta Resend, verificación específica del subdominio para enviar correo, remitente, configuración privada y autorización de un destinatario para comprobar recepción. La configuración por sí sola no demuestra entrega.
 
 El formulario de producción permanece cerrado mientras falten datos públicos válidos del responsable y contacto, o la configuración del remitente no sea apta. No registra direcciones en ese estado. La baja revoca el enlace de confirmación anterior; una nueva solicitud genera otro token. Una confirmación incierta se concilia antes de preparar otra.
 
 ## Primer paso del titular: crear la cuenta
 
 1. Abrir https://resend.com/signup, crear la cuenta y confirmar el correo de acceso. Ese correo es privado de la cuenta; no se convierte en contacto público del sitio.
-2. Elegir el plan **Free**. Los límites oficiales consultados el 19/10/2026 son 100 correos diarios y 3.000 mensuales; no activar un plan pago, excedentes ni una contratación por este procedimiento.
-3. En **Domains → Add Domain**, introducir `saltaemplea.com`. Usar una región ofrecida y conservarla; la aplicación no fija una región de envío ni inventa registros.
+2. Elegir el plan **Free**. El precio oficial verificado el 20/10/2026 es USD 0 mensuales, con 100 correos diarios y 3.000 mensuales. Incluye hasta tres dominios y un endpoint de webhook. No activar un plan pago, excedentes ni una contratación por este procedimiento. Si la pantalla del proveedor muestra un importe distinto, detener la contratación y revisar el costo concreto.
+3. En **Domains → Add Domain**, introducir `alerts.saltaemplea.com`. Separar el envío ayuda a mantenerlo independiente del dominio de la web. Usar una región ofrecida y conservarla; la aplicación no fija una región de envío ni inventa registros.
 4. Conservar los nombres, tipos y valores DNS generados. Son datos de verificación del dominio, diferentes de una clave API; pueden usarse para preparar los registros en Vercel DNS. No modificar los registros de la web ni el MX de una casilla existente.
-5. Tras la verificación, se prepara el remitente de alertas, la clave limitada al envío y el webhook. Los secretos se guardan directamente en **Vercel → salta-emplea → Settings → Environment Variables → Production**, como Secret. Los nombres figuran abajo; no enviar los valores por chat.
+5. Esperar el estado **Verified**. Como remitente se propone **Salta Emplea**, con la dirección `avisos@alerts.saltaemplea.com`; esta dirección no crea una casilla receptora ni reemplaza el contacto público en LinkedIn. No crear ni compartir claves todavía.
+
+Después de verificar el dominio se prepara primero el webhook y su secreto; luego la clave API con **Sending access**, limitada al subdominio. Los secretos se guardan directamente en **Vercel → salta-emplea → Settings → Environment Variables → Production**, como Secret. Los nombres figuran abajo; no enviar los valores por chat. No completar la activación y el despliegue con API y remitente hasta acordar un destinatario y su consentimiento: el código actual habilita el formulario con esos datos y el programador existente podría intentar entregar mensajes aunque faltase el webhook.
 
 Agregar el dominio en Resend y publicar sus registros no crea una casilla de correo ni acredita recepción de las alertas. La prueba con un destinatario autorizado es un paso posterior.
 
@@ -102,10 +104,11 @@ En local, `tests/test_mailer.py` y `tests/test_mail_webhooks.py` sustituyen el p
 
 ## Referencias oficiales consultadas
 
-Consultadas el 19/10/2026; volver a comprobar antes de contratar o activar:
+Precios, cuotas, dominios, permisos API y eventos de webhook revalidados el 20/10/2026. Las referencias restantes se consultaron el 19/10/2026; volver a comprobar antes de contratar o activar:
 
 - [Precios de Resend](https://resend.com/pricing) y [cuotas y límites](https://resend.com/docs/knowledge-base/account-quotas-and-limits).
 - [Alta y verificación de dominio](https://resend.com/docs/add-a-domain) y [DMARC](https://resend.com/docs/dashboard/domains/dmarc).
+- [Direcciones remitentes sin casilla receptora](https://resend.com/docs/knowledge-base/how-do-I-create-an-email-address-or-sender-in-resend) y [permisos de claves API](https://resend.com/docs/api-reference/api-keys/create-api-key).
 - [Idempotencia](https://resend.com/docs/dashboard/emails/idempotency-keys).
 - [Verificación de webhooks de Resend](https://resend.com/docs/webhooks/verify-webhooks-requests) y [protocolo manual oficial de Svix](https://docs.svix.com/receiving/verifying-payloads/how-manual).
 - [Rebotes](https://resend.com/docs/webhooks/emails/bounced), [quejas](https://resend.com/docs/webhooks/emails/complained) y [supresiones](https://resend.com/docs/webhooks/emails/suppressed).

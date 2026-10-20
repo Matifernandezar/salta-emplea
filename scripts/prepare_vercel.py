@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from salta_emplea import db, operations, source_setup
+from salta_emplea import db, launch_cleanup, operations, source_setup
 
 
 def main():
@@ -25,6 +25,8 @@ def main():
     try:
         result = source_setup.configure_authorized_source(conn, os.environ)
         print('Registro de fuente autorizada: ' + result['status'])
+        cleanup = launch_cleanup.retire_known_test_offer(conn, os.environ)
+        print('SALTA_TEST_RETIREMENT ' + json.dumps(cleanup, sort_keys=True))
         if os.environ.get('VERCEL_ENV') == 'production' and os.environ.get('ENABLE_JOBICY_SOURCE') == '1':
             print('SALTA_SOURCE_CHECK ' + json.dumps(operations.source_collection_summary(conn), sort_keys=True))
     finally:
