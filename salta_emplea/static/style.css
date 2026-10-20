@@ -2854,6 +2854,7 @@ td:first-child {
 .guide-example {
   padding:20px 24px;
   margin-block:20px;
+  margin-inline:0;
   border:1px solid var(--line);
   border-left:4px solid var(--teal);
   border-radius:0 10px 10px 0;
@@ -3032,6 +3033,9 @@ td:first-child {
   }
 }
 @media(max-width:480px) {
+  .home-search .filter-grid {
+    grid-template-columns:minmax(0,1fr)
+  }
   .summary-hint {
     display:none
   }

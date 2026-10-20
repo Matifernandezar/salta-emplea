@@ -28,7 +28,8 @@ SECTOR = 'Administración'
 SCHEDULE = 'Jornada parcial'
 WIDTHS = (360, 390, 768, 1024, 1440)
 CANONICAL_ORIGIN = 'https://preview.example.test'
-PREVIEW_FILES = ('portada-390.png', 'portada-1440.png')
+PREVIEW_FILES = ('portada-390.png', 'portada-1440.png',
+                 'filtros-390.png', 'guia-cv-390.png')
 
 
 def seed_jobs(app):
@@ -259,6 +260,8 @@ def run_width(browser, width, capture_folder):
                 assert guide.goto(origin + path).status == 200
                 expect(guide.get_by_role('heading', level=1)).to_have_count(1)
                 no_horizontal_overflow(guide)
+                if width == 390 and path == '/guias/cv-sin-experiencia':
+                    guide.screenshot(path=str(capture_folder / 'guia-cv-390.png'), full_page=True)
                 guide.close()
 
             page.locator('[name="q"]').fill('PRUEBA-sin-coincidencias-improbable')
@@ -298,7 +301,7 @@ def run_width(browser, width, capture_folder):
 
 
 def emit_previews(capture_folder):
-    """Exportación CLI optativa: solo dos capturas públicas con fixtures PRUEBA.
+    """Exportación CLI optativa: cuatro capturas públicas del entorno PRUEBA.
 
     No se exportan páginas administrativas, sesiones, claves ni datos reales.
     Los fragmentos permiten recuperar imágenes desde logs de CI cuando la
@@ -320,7 +323,7 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'docs' / 'portada',
                         help='Carpeta de resultados y capturas de laboratorio.')
     parser.add_argument('--emit-preview', action='store_true',
-                        help='Emitir dos PNG de datos PRUEBA en fragmentos base64 al aprobar el circuito.')
+                        help='Emitir cuatro PNG del entorno PRUEBA en fragmentos base64 al aprobar el circuito.')
     args = parser.parse_args()
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     captures = args.output / 'capturas'

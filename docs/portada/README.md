@@ -63,7 +63,7 @@ El workflow también conserva una comprobación pública de solo lectura del sit
 
 ## Estado y límites
 
-Las pruebas HTTP focalizadas iniciales pasaron. La validación completa y visual de esta entrega se registra en el apartado de evidencia al completar CI. Chromium no puede arrancar en el sandbox local por restricciones del sistema; el workflow realiza esa comprobación en un runner aislado. No se debe presentar el intento local fallido como una prueba aprobada.
+Las pruebas HTTP y el circuito de navegador pasaron en CI; el detalle figura en evidencia. Chromium no puede arrancar en el sandbox local por restricciones del sistema; el workflow realiza esa comprobación en un runner aislado. El intento local fallido no se presenta como una prueba aprobada.
 
 Las alertas por correo siguen en pausa y no se ofrece un alta ficticia. Google Vision permanece deshabilitado. No se aprobaron ni modificaron ofertas de producción, no se contrataron servicios y no se cambiaron secretos. La rama de revisión no sustituye el despliegue de producción.
 
@@ -71,4 +71,11 @@ Antes de lanzar, el titular debe revisar y retirar cualquier aviso de prueba pub
 
 ## Evidencia
 
-Pendiente de registrar el resultado del workflow de esta rama y de inspeccionar sus capturas. La implementación no se declara validada visualmente hasta completar ese paso.
+- Commit inicial comprobado: `cbe16374c22a71606dbe5ab2609430ed35c8d888`.
+- Local: 779 pruebas aprobadas y 14 omitidas, dependientes de PostgreSQL.
+- [CI PostgreSQL](https://github.com/Matifernandezar/salta-emplea/actions/runs/39377476575): 793 pruebas aprobadas, sin omisiones.
+- [CI Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39377476585): circuito editorial previo y nuevo circuito de portada aprobados. Cinco anchos completados: 360, 390, 768, 1024 y 1440 px. Se comprobaron controles de 44 px, fuente de al menos 16 px, foco, muestras de contraste y ausencia de desplazamiento horizontal.
+- Se inspeccionaron las capturas reales de portada de 390 y 1440 px. Las imágenes contienen solo fixtures PRUEBA. El artefacto `capturas-publicas` conserva además filtros y estados vacíos durante tres días; no es un almacenamiento permanente.
+- Tras esa revisión se ajustan filtros avanzados a una columna hasta 480 px y márgenes de ejemplos de las guías. La comprobación final de estos ajustes se registrará al completar el siguiente workflow.
+
+La [propuesta de revisión](https://github.com/Matifernandezar/salta-emplea/pull/1) conserva el código y la evidencia. Vercel intentó crear automáticamente una vista previa de la rama y falló antes del despliegue: el [log del build](https://vercel.com/matias-projects-2dbf9656/salta-emplea/Gj9gDkGdLimr8dRyGXkRuKj7rCxQ) indica que falta `DATABASE_URL` PostgreSQL en Preview. Para habilitar una URL de revisión en Vercel hay que configurar una base aislada y sus variables de Preview; no corresponde compartir la base ni secretos de producción con una PR. La revisión actual se puede realizar con las capturas, CI o la instalación local. El dominio de producción no se modificó.
