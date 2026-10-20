@@ -11,10 +11,12 @@ import unicodedata
 from urllib.parse import quote, unquote, urlsplit
 from xml.etree.ElementTree import Element, SubElement, tostring
 
+from . import guides
+
 
 SITE_NAME = 'Salta Emplea'
-DEFAULT_DESCRIPTION = ('Encontrá ofertas de trabajo en Salta y oportunidades remotas '
-                       'accesibles desde la provincia. Postulate por el canal original del aviso.')
+DEFAULT_DESCRIPTION = ('Buscá trabajo en Salta y oportunidades remotas. Filtrá por localidad, '
+                       'rubro y modalidad y consultá cómo postularte en cada aviso.')
 SITEMAP_NAMESPACE = 'http://www.sitemaps.org/schemas/sitemap/0.9'
 
 
@@ -100,17 +102,21 @@ def legal_identity(config):
             'mailto': 'mailto:' + quote(email, safe='@.+-') if email else None}
 
 
-def page_metadata(config, endpoint, *, job=None, filtered=False, method='GET'):
+def page_metadata(config, endpoint, *, job=None, guide=None, filtered=False, method='GET'):
     """Las páginas con tokens o acciones nunca reciben URL pública ni OG."""
     pages = {
-        'index': ('Trabajo en Salta', '/', DEFAULT_DESCRIPTION),
+        'index': ('Trabajo en Salta y ofertas de empleo', '/', DEFAULT_DESCRIPTION),
         'privacy': ('Privacidad', '/privacidad', 'Cómo se tratan los datos, las imágenes y las solicitudes de privacidad en Salta Emplea.'),
         'terms': ('Condiciones del servicio', '/condiciones', 'Alcance del servicio, fuentes de los avisos y condiciones de uso de Salta Emplea.'),
         'subscribe': ('Alertas por correo', '/alertas', 'Elegí tus preferencias de ofertas laborales. Suscripción voluntaria con confirmación y baja sencilla.'),
         'submit_job': ('Compartir una oferta', '/publicar', 'Aportá un aviso de trabajo para revisión. Ninguna oferta se publica sin aprobación.'),
     }
     indexable = method in ('GET', 'HEAD') and endpoint in ('index', 'job_detail', 'privacy', 'terms')
-    if endpoint == 'job_detail' and job:
+    if endpoint == 'guide_detail' and guide and guides.get_guide(guide.get('slug')):
+        guide = guides.get_guide(guide['slug'])
+        title, path, description = guide['title'], '/guias/' + guide['slug'], guide['summary']
+        indexable = method in ('GET', 'HEAD')
+    elif endpoint == 'job_detail' and job:
         title = ' '.join(str(job['title']).split())
         details = [job.get('company'), job.get('location'), job.get('modality')]
         description = ' · '.join(str(v) for v in details if v)
@@ -126,7 +132,9 @@ def page_metadata(config, endpoint, *, job=None, filtered=False, method='GET'):
     if filtered:
         indexable = False
     canonical = public_url(config, path) if path else None
-    return {'title': title + ' · ' + SITE_NAME if title != SITE_NAME else title,
+    document_title = (title + ' | ' + SITE_NAME if endpoint == 'index'
+                      else title + ' · ' + SITE_NAME if title != SITE_NAME else title)
+    return {'title': document_title,
             'description': description, 'canonical': canonical,
             'indexable': bool(indexable and canonical), 'site_name': SITE_NAME}
 
@@ -136,7 +144,7 @@ def sitemap_xml(config, jobs):
     if not public_origin(config):
         raise ValueError('Falta un PUBLIC_BASE_URL HTTPS válido para el sitemap.')
     root = Element('urlset', xmlns=SITEMAP_NAMESPACE)
-    paths = ['/']
+    paths = ['/'] + ['/guias/' + guide['slug'] for guide in guides.all_guides()]
     if legal_identity(config)['complete']:
         paths += ['/privacidad', '/condiciones']
     paths += ['/ofertas/' + str(int(job['id'])) for job in jobs]

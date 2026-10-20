@@ -346,12 +346,12 @@ def public_jobs(conn, filters=None):
     q = _text(filters.get("q"), 200)
     if q:
         pattern = "%" + _fold(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        conditions.append("(fold(title) LIKE ? ESCAPE '\\' OR fold(company) LIKE ? ESCAPE '\\' OR fold(description) LIKE ? ESCAPE '\\' OR fold(requirements) LIKE ? ESCAPE '\\')")
-        values.extend([pattern] * 4)
+        conditions.append("(fold(title) LIKE ? ESCAPE '\\' OR fold(company) LIKE ? ESCAPE '\\' OR fold(description) LIKE ? ESCAPE '\\' OR fold(requirements) LIKE ? ESCAPE '\\' OR fold(sector) LIKE ? ESCAPE '\\')")
+        values.extend([pattern] * 5)
     for field in ("location", "sector", "modality", "schedule"):
         value = _text(filters.get(field), 200)
         if value:
-            conditions.append('lower(' + field + ') = lower(?)')
+            conditions.append('fold(' + field + ') = fold(?)')
             values.append(value)
     days = filters.get("days") or filters.get("date_days")
     if days:

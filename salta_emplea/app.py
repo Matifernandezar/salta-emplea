@@ -18,7 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import db, domain, extraction, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
+from . import db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
 from .config import load_env
 
 
@@ -132,7 +132,9 @@ def create_app(config=None):
         return {'page_meta': public_metadata.page_metadata(
             app.config, request.endpoint,
             filtered=request.endpoint == 'index' and bool(request.query_string),
-            method=request.method), 'legal_identity': public_metadata.legal_identity(app.config)}
+            method=request.method), 'legal_identity': public_metadata.legal_identity(app.config),
+            'mail_available': mail_submission_ready(),
+            'preview_mode': app.config['APP_ENV'] == 'development'}
 
     def limited(action, limit=10, seconds=3600):
         # Se almacena un hash salado del IP; no se confía en X-Forwarded-For sin proxy configurado.
@@ -173,7 +175,7 @@ def create_app(config=None):
             response.headers['Referrer-Policy'] = 'no-referrer'
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         elif (response.status_code >= 400 or request.method not in ('GET', 'HEAD') or
-              request.endpoint not in ('index', 'job_detail', 'privacy', 'terms', 'sitemap', 'robots', 'static') or
+              request.endpoint not in ('index', 'job_detail', 'guide_detail', 'privacy', 'terms', 'sitemap', 'robots', 'static') or
               (request.endpoint == 'index' and request.query_string) or
               (request.endpoint in ('privacy', 'terms') and not public_metadata.legal_identity(app.config)['complete'])):
             response.headers['X-Robots-Tag'] = 'noindex, follow'
@@ -230,15 +232,28 @@ def create_app(config=None):
     @app.get('/')
     def index():
         conn = connection()
-        filters = request.args.to_dict()
+        filters = homepage.search_filters(request.args)
         try:
             jobs = domain.public_jobs(conn, filters)
         except ValueError as exc:
             abort(400, str(exc))
-        all_jobs = domain.public_jobs(conn)
-        facets = {name: sorted({j[field] for j in all_jobs if j.get(field)}) for name, field in [('locations', 'location'), ('sectors', 'sector'), ('schedules', 'schedule')]}
+        all_jobs = jobs if not filters else domain.public_jobs(conn)
+        facets = homepage.facets(all_jobs, filters)
         ads = [dict(r) for r in conn.execute('SELECT * FROM ads WHERE active=1 AND starts_at<=? AND ends_at>=?', (domain.now(), domain.now()))]
-        return render_template('index.html', jobs=jobs, filters=filters, facets=facets, ads=ads)
+        return render_template('index.html', jobs=jobs, filters=filters, facets=facets, ads=ads,
+                               home=homepage.presentation(all_jobs, jobs, filters,
+                                                          index_url=url_for('index')),
+                               guides=guides.all_guides())
+
+    @app.get('/guias/<slug>')
+    def guide_detail(slug):
+        guide = guides.get_guide(slug)
+        if guide is None:
+            abort(404)
+        return render_template('guide.html', guide=guide,
+                               related_guides=guides.all_guides(exclude=slug),
+                               page_meta=public_metadata.page_metadata(app.config, 'guide_detail',
+                                                                       guide=guide))
 
     @app.get('/ofertas/<int:job_id>')
     def job_detail(job_id):
