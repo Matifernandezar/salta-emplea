@@ -14,4 +14,12 @@ Procedimiento de aplicación:
 4. Comprobar que `/ofertas/1` ya no es público y que la oferta real continúa accesible, junto con `/salud`.
 5. Deshabilitar el indicador después de comprobar el resultado. Conservar el marcador y la auditoría.
 
-El archivado es reversible desde el panel por decisión del titular. Un rollback de la interfaz no vuelve a publicar el aviso ni deshace esta decisión editorial. La ejecución real queda pendiente hasta registrar sus comprobaciones.
+El archivado es reversible desde el panel por decisión del titular. Un rollback de la interfaz no vuelve a publicar el aviso ni deshace esta decisión editorial.
+
+## Aplicación real comprobada el 20/10/2026
+
+- Código: `53b189d85ca7172bda66710be6642adf053eca9b`. [CI PostgreSQL](https://github.com/Matifernandezar/salta-emplea/actions/runs/39449060664): 819 pruebas aprobadas, incluidas las de éxito, idempotencia, identidad modificada y rollback del retiro. [Chromium](https://github.com/Matifernandezar/salta-emplea/actions/runs/39449061017): aprobado.
+- Producción: despliegue `dpl_2281wjbRwKqYwBMcBXhj7wjQqXaD`, READY. El build registró `SALTA_TEST_RETIREMENT` con estado `archived`, cantidad uno e ID uno.
+- Comprobación pública posterior: `/ofertas/1` devuelve HTTP 404; la portada devuelve HTTP 200 y únicamente enlaza la oferta 9. `/ofertas/9` conserva HTTP 200, y `/salud` devuelve `{"status":"ok"}`.
+- Después de comprobar el resultado, se deshabilitó el indicador en Production. Se conserva el marcador de idempotencia y la auditoría. No se eliminó ninguna fila ni se publicaron o aprobaron ofertas.
+- El correo sigue sin credenciales ni remitente configurados: no se enviaron mensajes. La guía de Resend y DNS se actualizó en `docs/CORREO.md`.
