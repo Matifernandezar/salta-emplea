@@ -67,6 +67,33 @@ def _counts(**values):
     return dict(queued=0, sent=0, skipped=0, errors=0) | values
 
 
+def _test_recipient(config):
+    """Vacío desactiva la restricción; cualquier valor inválido falla cerrado."""
+    value = config.get("MAIL_TEST_RECIPIENT", "")
+    if value == "":
+        return ""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if (len(normalized) > 254 or not normalized.isascii() or
+            not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,63}", normalized)
+            or ".." in normalized):
+        return None
+    local, domain = normalized.rsplit("@", 1)
+    if (local.startswith(".") or local.endswith(".") or len(local) > 64 or
+            any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in domain.split("."))):
+        return None
+    return normalized
+
+
+def test_recipient_allowed(config, email):
+    """No revelar el destinatario limitado en diagnósticos, plantillas o logs."""
+    recipient = _test_recipient(config)
+    return recipient is not None and (recipient == "" or
+        isinstance(email, str) and email.strip().lower() == recipient)
+
+
 def suppression_key(email):
     """Identificador seudónimo estable: no guardar direcciones en auditoría."""
     digest = hashlib.sha256(str(email).strip().lower().encode()).hexdigest()
@@ -262,7 +289,7 @@ def _digest_body(subscriber_id, jobs, base_url, secret_key, unsubscribe_url=None
     return "\n".join(lines)
 
 
-def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None):
+def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None, config=None):
     """Reserva un lote de suscripciones sin perder el avance entre corridas.
 
     El cursor circular avanza incluso si no hay ofertas o todavía no corresponde
@@ -270,29 +297,36 @@ def queue_digests(conn, base_url, secret_key, *, limit=100, deadline=None):
     ``last_sent_at`` se conserva exclusivamente para entregas confirmadas.
     """
     counters = _counts()
+    recipient = _test_recipient(config or {})
+    if recipient is None:
+        return _counts(skipped=1)
+    recipient_filter = " AND lower(trim(email))=?" if recipient else ""
+    recipient_params = (recipient,) if recipient else ()
+    cursor_key = "digest_test_cursor" if recipient else "digest_cursor"
     instant = _now()
     limit = max(1, min(int(limit), 100))
     with _transaction(conn):
-        cursor = conn.execute("SELECT value FROM settings WHERE key='digest_cursor'").fetchone()
+        cursor = conn.execute("SELECT value FROM settings WHERE key=?", (cursor_key,)).fetchone()
         try:
             after_id = int(cursor[0]) if cursor else 0
         except (ValueError, TypeError):
             after_id = 0
         subscribers = conn.execute(
-            "SELECT * FROM subscribers WHERE status='confirmed' AND id>? ORDER BY id LIMIT ?", (after_id, limit),
+            "SELECT * FROM subscribers WHERE status='confirmed' AND id>?" + recipient_filter + " ORDER BY id LIMIT ?",
+            (after_id,) + recipient_params + (limit,),
         ).fetchall()
         if len(subscribers) < limit:
             subscribers += conn.execute(
-                "SELECT * FROM subscribers WHERE status='confirmed' AND id<=? ORDER BY id LIMIT ?",
-                (after_id, limit - len(subscribers)),
+                "SELECT * FROM subscribers WHERE status='confirmed' AND id<=?" + recipient_filter + " ORDER BY id LIMIT ?",
+                (after_id,) + recipient_params + (limit - len(subscribers),),
             ).fetchall()
         for subscriber in subscribers:
             if deadline is not None and time.monotonic() >= deadline:
                 counters['budget_exhausted'] = True
                 break
             conn.execute(
-                "INSERT INTO settings(key,value) VALUES ('digest_cursor',?) "
-                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(subscriber['id']),),
+                "INSERT INTO settings(key,value) VALUES (?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (cursor_key, str(subscriber['id'])),
             )
             if is_suppressed(conn, subscriber["email"]):
                 conn.execute("UPDATE subscribers SET status='unsubscribed',token_hash='' WHERE id=?", (subscriber["id"],))
@@ -387,6 +421,8 @@ def delivery_readiness(config):
         ("remitente", _valid_sender(config), "Falta un remitente válido de un dominio propio."),
         ("webhook", _valid_webhook_secret(config.get("RESEND_WEBHOOK_SECRET")),
          "Falta un secreto válido para recibir rebotes y quejas del proveedor."),
+        ("prueba", _test_recipient(config) is not None,
+         "La restricción del destinatario de prueba requiere una configuración válida."),
         ("limites", _limit(config, "MAIL_DAILY_LIMIT", DEFAULT_DAILY_LIMIT) > 0
          and _limit(config, "MAIL_MONTHLY_LIMIT", DEFAULT_MONTHLY_LIMIT) > 0,
          "Los límites diarios y mensuales deben ser positivos."),
@@ -409,6 +445,11 @@ def _cancel(conn, outbox_id, reason):
 def _prepare_delivery(conn, item, config):
     """Revalida justo antes de reservar el intento; devuelve cuerpo o None."""
     subscriber = conn.execute("SELECT * FROM subscribers WHERE id=?", (item["subscriber_id"],)).fetchone()
+    # Revalidar bajo el bloqueo: cambios entre selección y reserva no pueden
+    # alcanzar otra dirección ni alterar sus mensajes, intentos o supresiones.
+    if (not test_recipient_allowed(config, item["recipient"]) or
+            subscriber is not None and not test_recipient_allowed(config, subscriber["email"])):
+        return None
     if subscriber is None or subscriber["email"] != item["recipient"]:
         _cancel(conn, item["id"], "La suscripción cambió o ya no existe.")
         return None
@@ -484,10 +525,14 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
     if conn.in_transaction:
         raise ValueError("Confirmá la transacción antes de procesar correos.")
     limit = max(1, min(int(limit if limit is not None else config.get('TASK_MAIL_BATCH', 10)), 100))
+    recipient = _test_recipient(config)
+    recipient_filter = (" AND lower(trim(recipient))=? AND EXISTS "
+                        "(SELECT 1 FROM subscribers s WHERE s.id=outbox.subscriber_id AND lower(trim(s.email))=?)") if recipient else ""
+    recipient_params = (recipient, recipient) if recipient else ()
     pending_ids = [row[0] for row in conn.execute(
-        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) "
+        "SELECT id FROM outbox WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?)" + recipient_filter + " "
         "ORDER BY CASE WHEN kind='confirmation' THEN 0 ELSE 1 END,id LIMIT ?",
-        (_stamp(), limit),
+        (_stamp(),) + recipient_params + (limit,),
     )]
     for outbox_id in pending_ids:
         # Reservar tiempo para el timeout de red antes de marcar un intento.
@@ -497,8 +542,8 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
             break
         with _transaction(conn):
             item = conn.execute(
-                "SELECT * FROM outbox WHERE id=? AND status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?)",
-                (outbox_id, _stamp()),
+                "SELECT * FROM outbox WHERE id=? AND status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?)" + recipient_filter,
+                (outbox_id, _stamp()) + recipient_params,
             ).fetchone()
             if item is None:
                 counters["skipped"] += 1

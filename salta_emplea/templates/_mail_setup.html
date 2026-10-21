@@ -1,6 +1,7 @@
 {% set mail_status = mail_status|default({'ready': false, 'missing': []}) %}
 <section class="paper admin-section" aria-labelledby="mail-setup-title">
   <h2 id="mail-setup-title">Preparar alertas por correo</h2>
+  {% if mail_status.test_mode %}<p class="notice">El correo está limitado a una prueba con un destinatario autorizado. Las demás direcciones no reciben envíos ni pueden registrarse durante esta prueba.</p>{% endif %}
   {% if mail_status.ready %}
   <p class="notice notice-success">Configuración local preparada para intentar envíos. Esto no acredita la verificación del dominio ni la recepción de mensajes.</p>
   {% else %}

@@ -46,6 +46,7 @@ Guardar los secretos como variables sensibles del proveedor. No compartir valore
 | Variable | Función |
 | --- | --- |
 | `MAIL_ENABLED` | Habilitación explícita. Ausente o con cualquier valor distinto del indicador exacto de habilitación, el envío y el formulario permanecen cerrados. Predeterminado deshabilitado. |
+| `MAIL_TEST_RECIPIENT` | Restricción opcional a un único destinatario expresamente autorizado. Guardar en privado solo en Production. Vacío desactiva la restricción; un valor inválido bloquea el envío. |
 | `RESEND_API_KEY` | Credencial de envío, con el menor alcance disponible. |
 | `MAIL_FROM` | Remitente del dominio autorizado. |
 | `RESEND_WEBHOOK_SECRET` | Secreto de firma del webhook; es distinto de la clave de envío. |
@@ -59,6 +60,10 @@ Guardar los secretos como variables sensibles del proveedor. No compartir valore
 | `TASK_MAIL_BATCH` | Cantidad máxima por corrida; además se respetan tiempo, cuotas y bloqueo de tareas. |
 
 El indicador de habilitación es `1`; `0` pausa. No representa la aprobación de una oferta ni sustituye el consentimiento del destinatario. El diagnóstico CLI separa presencia de variables y preparación local del envío. Un secreto con formato válido no acredita que sea real ni que el proveedor esté conectado: la conexión exige la prueba firmada real indicada más abajo.
+
+Para una prueba limitada, configurar `MAIL_TEST_RECIPIENT` antes de habilitar el envío y desplegar ambos cambios juntos. La restricción alcanza las confirmaciones y los resúmenes, incluidas las tareas programadas. La cola de las otras direcciones permanece intacta, sin nuevos intentos ni reservas de cuota por esta prueba. El formulario informa que el servicio está en pruebas y solo registra el destinatario permitido, sin mostrar su dirección. No incluir esa dirección en documentación, Git, logs ni capturas. Configurar la restricción no demuestra entrega.
+
+Retirar `MAIL_TEST_RECIPIENT` y desplegar únicamente después de completar la validación y de que el titular decida abrir las suscripciones públicas. Vaciarla habilita el procesamiento normal de toda la cola consentida; comprobar sus pendientes antes de esa apertura. Si se vuelve a una versión que no implemente esta restricción, pausar primero el correo y desplegar la pausa. No borrar reservas ni historial para repetir pruebas.
 
 Si es necesario volver a una versión anterior que no conozca el indicador de pausa, primero deshabilitar la credencial de envío y desplegar esa configuración. Esas versiones no respetan `MAIL_ENABLED`. No borrar mensajes, reservas ni historial para preparar un rollback.
 
@@ -104,6 +109,8 @@ El ledger guarda hashes de identificador/cuerpo, fecha y resultado fijo; las mar
 ## Prueba real que falta para el lanzamiento
 
 Solo realizarla después de que el titular autorice expresamente un destinatario, confirme dominio/plan y configure las credenciales privadas. No enviar a terceros ni a direcciones inventadas.
+
+El titular autorizó una dirección propia para esta prueba y confirmó el dominio verificado. La dirección se conserva solo en la configuración privada; esa autorización no acredita que los mensajes ya hayan salido o llegado. Mantener la restricción durante toda la comprobación.
 
 1. Solicitar la suscripción desde la web con filtros y frecuencia elegidos.
 2. Ejecutar el lote o esperar una corrida real del programador. Registrar solo resultado y fecha, sin dirección, enlaces privados ni contenido del correo.

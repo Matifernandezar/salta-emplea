@@ -41,6 +41,7 @@ def create_app(config=None):
         PUBLIC_CONTACT_URL=os.environ.get('PUBLIC_CONTACT_URL', ''),
         APP_ENV=os.environ.get('APP_ENV', 'production' if os.environ.get('VERCEL') == '1' else 'development'),
         MAIL_ENABLED=os.environ.get('MAIL_ENABLED', '0'),
+        MAIL_TEST_RECIPIENT=os.environ.get('MAIL_TEST_RECIPIENT', ''),
         RESEND_API_KEY=os.environ.get('RESEND_API_KEY', ''),
         MAIL_FROM=os.environ.get('MAIL_FROM', ''),
         RESEND_WEBHOOK_SECRET=os.environ.get('RESEND_WEBHOOK_SECRET', ''),
@@ -211,6 +212,7 @@ def create_app(config=None):
     def mail_configuration_state():
         from . import mailer
         state = mailer.delivery_readiness(app.config)
+        state['test_mode'] = app.config.get('MAIL_TEST_RECIPIENT', '') != ''
         if production and not public_metadata.legal_identity(app.config)['complete']:
             state['missing'].append({'key': 'responsable', 'message': 'Completar el responsable y un contacto público válido.'})
             state['ready'] = False
@@ -728,6 +730,8 @@ def create_app(config=None):
                 flash('Ingresá un correo válido, frecuencia y consentimiento.', 'error')
             elif not mail_submission_ready():
                 return render_template('message.html', title='Alertas pendientes de configuración', message='El envío de correo todavía no está habilitado. No registramos tu dirección. Podés consultar las ofertas en la web.')
+            elif not mailer.test_recipient_allowed(app.config, email):
+                return render_template('message.html', title='Alertas en pruebas', message='El servicio de correo está en una prueba limitada. No registramos tu dirección. Podés consultar las ofertas en la web.')
             else:
                 conn = connection()
                 with conn:
@@ -744,7 +748,8 @@ def create_app(config=None):
                     if subscriber_id:
                         mailer.queue_confirmation(conn, subscriber_id, app.config['PUBLIC_BASE_URL'], app.config['SECRET_KEY'])
                 return render_template('message.html', title='Solicitud recibida', message='Si corresponde, recibirás un enlace para confirmar el correo. La suscripción se activa solo después de confirmarlo. Si ya estás suscripto, conservamos tus preferencias.')
-        return render_template('subscribe.html', data=request.form, mail_ready=mail_submission_ready())
+        return render_template('subscribe.html', data=request.form, mail_ready=mail_submission_ready(),
+                               mail_test_mode=app.config.get('MAIL_TEST_RECIPIENT', '') != '')
 
     @app.route('/alertas/confirmar/<token>', methods=['GET', 'POST'])
     def confirm_subscription(token):

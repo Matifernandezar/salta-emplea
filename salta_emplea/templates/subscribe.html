@@ -4,6 +4,7 @@
 <a class="back-link" href="{{ url_for('index') }}">← Volver al buscador</a>
 <p class="eyebrow">Tu próxima oportunidad, por correo</p>
 <h1>Recibí ofertas que te interesan.</h1>
+{% if mail_test_mode %}<div class="notice" role="note">El correo está en una prueba limitada a un destinatario autorizado. Todavía no se admiten nuevas suscripciones generales.</div>{% endif %}
 <p class="lead">{% if mail_ready %}Elegí tus preferencias. Te pediremos confirmar tu correo antes de activar la suscripción.{% else %}Estamos preparando las alertas. Mientras tanto, podés consultar las ofertas en el buscador.{% endif %}</p>{% if mail_ready is defined and not mail_ready %}<div class="notice">Las alertas por correo están pendientes de configuración. Tu dirección no se registrará hasta que el servicio esté habilitado.</div>{% endif %}{% if errors %}<div class="notice notice-error" role="alert">
 <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
 </div>{% endif %}{% set data = data|default({}) %}{% if mail_ready %}<form class="paper form-paper" method="post">

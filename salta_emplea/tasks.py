@@ -231,7 +231,7 @@ def _run_locked_tasks(conn, config, only, deadline):
         if only in (None, 'mail'):
             _check_budget(deadline)
             batch = max(1, min(int(config.get('TASK_MAIL_BATCH', 10)), 100))
-            result['queue'] = mailer.queue_digests(conn, config.get('PUBLIC_BASE_URL', ''), config['SECRET_KEY'], limit=batch, deadline=deadline) if config.get('PUBLIC_BASE_URL') else {'skipped': 'PUBLIC_BASE_URL sin configurar'}
+            result['queue'] = mailer.queue_digests(conn, config.get('PUBLIC_BASE_URL', ''), config['SECRET_KEY'], limit=batch, deadline=deadline, config=config) if config.get('PUBLIC_BASE_URL') else {'skipped': 'PUBLIC_BASE_URL sin configurar'}
             result['mail'] = mailer.send_outbox(conn, config, limit=batch, deadline=deadline)
             failed = failed or result['mail'].get('errors', 0) > 0
             if result['queue'].get('budget_exhausted') or result['mail'].get('budget_exhausted'):
