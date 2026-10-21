@@ -3,6 +3,7 @@
 import base64
 import json
 from datetime import timedelta
+from io import BytesIO
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -267,6 +268,8 @@ def test_envio_real_mock_revalida_aprobacion_y_registra_solo_un_envio(database, 
     assert "PRUEBA: Analista" in payload["text"]
     assert "PRUEBA: No debe enviarse" not in payload["text"]
     assert requests[0].full_url == "https://api.resend.com/emails"
+    assert requests[0].get_header("User-agent") == "SaltaEmplea/1.0"
+    assert requests[0].get_header("Accept") == "application/json"
     assert outbox(database)["status"] == "sent"
     assert database.execute("SELECT last_sent_at FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()[0]
     assert mailer.send_outbox(database, config)["sent"] == 0
@@ -310,6 +313,30 @@ def test_confirmacion_revalidada_antes_de_enviar(database, config, monkeypatch):
     monkeypatch.setattr(mailer, "urlopen", lambda request, timeout: Accepted())
     assert mailer.send_outbox(database, config)["sent"] == 1
     assert database.execute("SELECT status FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()[0] == "pending"
+
+
+def test_rechazo_403_conserva_historial_y_causa_segura_sin_reintento(database, config, monkeypatch):
+    subscriber_id = subscriber(database, status="pending")
+    mailer.queue_confirmation(database, subscriber_id, BASE_URL, SECRET)
+    calls = []
+
+    def rejected(request, timeout):
+        calls.append(request)
+        body = {"statusCode": 403, "name": "validation_error",
+                "message": "The dominio-privado.test domain is not verified. dato-confidencial"}
+        raise HTTPError(request.full_url, 403, "no registrar", {}, BytesIO(json.dumps(body).encode()))
+
+    monkeypatch.setattr(mailer, "urlopen", rejected)
+    assert mailer.send_outbox(database, config)["errors"] == 1
+    before = dict(outbox(database))
+    assert before["status"] == "failed" and before["attempts"] == 1
+    assert before["next_attempt_at"] is None
+    assert "dominio del remitente no figura verificado" in before["last_error"]
+    assert "dominio-privado" not in before["last_error"] and "dato-confidencial" not in before["last_error"]
+    assert mailer.send_outbox(database, config)["sent"] == 0
+    assert dict(outbox(database)) == before
+    assert len(calls) == 1
+    assert mailer.quota_status(database, config)["daily"]["used"] == 1
 
 
 @pytest.mark.parametrize("code", [429, 500, 503])

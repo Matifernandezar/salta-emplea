@@ -3,6 +3,11 @@
   <span class="badge badge-{{ status|default('pending') }}">{{ labels.get(status, status|value) }}</span>
 {%- endmacro %}
 
+{% macro mail_status_badge(status) -%}
+  {% set labels = {'pending':'En cola','queued':'En cola','sent':'Aceptado por el proveedor','uncertain':'Entrega incierta: revisar','failed':'Falló el envío','cancelled':'Cancelado','retry':'Reintento pendiente','sending':'En proceso'} %}
+  <span class="badge badge-{{ status|default('pending') }}">{{ labels.get(status, 'No informado') }}</span>
+{%- endmacro %}
+
 {% macro job_card(job) -%}
   <article class="job-card" aria-labelledby="job-title-{{ job.id }}">
     <div class="job-info-head"><div><h3 id="job-title-{{ job.id }}">

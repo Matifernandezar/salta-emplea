@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import admin_nav, status_badge %}
+{% from '_macros.html' import admin_nav, status_badge, mail_status_badge %}
 {% block title %}Automatización{% endblock %}
 {% block content %}
 {% set image_state = image_status|default({}) %}
@@ -80,7 +80,8 @@
 </section>
 <section class="paper admin-section"><h2>Bandeja de correo</h2>
 <p>Los mensajes pendientes se conservan cuando falta configurar el proveedor. No se muestran direcciones, cuerpos ni tokens en esta pantalla.</p>
-{% for item in outbox_summary %}<p>{{ status_badge(item.status) }}: {{ item.total }}</p>{% else %}<p class="muted">No hay correos preparados.</p>{% endfor %}
+<p><a class="text-link" href="{{ url_for('admin') }}#registro-envios">Ver intentos y resultados en el registro de envíos →</a></p>
+{% for item in outbox_summary %}<p>{{ mail_status_badge(item.status) }}: {{ item.total }}</p>{% else %}<p class="muted">No hay correos preparados.</p>{% endfor %}
 </section>
 </div>
 {% endblock %}

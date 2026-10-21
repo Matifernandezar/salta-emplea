@@ -89,6 +89,18 @@ Antes de salir a la red se registra estado `uncertain`. Un timeout o una interru
 
 El estado `sent` significa aceptación HTTP del proveedor. Un evento `email.delivered` indica entrega reportada por el servidor destinatario; ninguno prueba que la persona lo encontró o lo leyó. El criterio de lanzamiento requiere recepción confirmada por el destinatario autorizado.
 
+## Diagnosticar una confirmación que no llega
+
+En Administración → Correos y tareas → Registro de envíos, revisar estado, intentos y resultado. Una tarea completada puede no tener correos nuevos que procesar; no acredita aceptación ni recepción. Automatización enlaza este registro y distingue aceptación, falta de nuevos envíos, cupo agotado y errores. Las ejecuciones manuales registran únicamente contadores cerrados con la marca `SALTA_TASK_MANUAL`.
+
+Un rechazo HTTP 403 es definitivo para ese intento. Puede corresponder a dominio/remitente, alcance de la clave o una restricción del proveedor; el número por sí solo no permite distinguirlos. Consultar el detalle de la petición en Resend → Logs, o abrir los logs desde el contador de solicitudes de la clave. No copiar Authorization, cuerpos de correo, destinatarios ni enlaces privados a documentación o capturas compartidas.
+
+El cliente identifica la aplicación con `User-Agent` y solicita JSON. Para errores nuevos, se lee una respuesta acotada y solo se conservan mensajes locales de una lista cerrada; nunca se guarda ni muestra la respuesta externa completa. Esto permite reconocer causas documentadas sin afirmar que una causa sea la de un intento anterior cuyo cuerpo no se conservó.
+
+Después de corregir una causa confirmada de rechazo, se puede solicitar una nueva confirmación de forma explícita. El registro fallido y las reservas anteriores permanecen intactos. Un estado incierto exige conciliar primero con Resend: no renovar solicitudes ni cambiar claves de idempotencia para forzar otra entrega.
+
+Validación real del 21/10/2026: el titular observó un primer intento de confirmación rechazado con HTTP 403 y no recibió el correo. En un diagnóstico posterior, dos consultas GET sin autenticación y sin envío a la API reprodujeron un bloqueo del cliente anterior: el identificador predeterminado recibió HTTP 403 con código 1010; el cliente identificado recibió el HTTP 401 esperado por ausencia de clave. Se añadió identificación propia y se alineó el remitente configurado con el subdominio preparado. Esa comparación no valida credenciales ni recupera el cuerpo del error histórico. Sigue pendiente comprobar un nuevo envío autorizado y completar recepción, resumen y baja; las pruebas locales y CI no sustituyen esa comprobación.
+
 ## Rebotes, quejas y supresión
 
 En el panel de Resend, crear un webhook para la URL pública terminada en `/api/webhooks/resend`, con los eventos `email.bounced`, `email.complained` y `email.suppressed`. Guardar su secreto de firma en la variable privada correspondiente y desplegar. No usar la clave de envío como secreto de webhook.
@@ -130,5 +142,6 @@ Precios, cuotas, dominios, permisos API y eventos de webhook revalidados el 20/1
 - [Alta y verificación de dominio](https://resend.com/docs/add-a-domain) y [DMARC](https://resend.com/docs/dashboard/domains/dmarc).
 - [Direcciones remitentes sin casilla receptora](https://resend.com/docs/knowledge-base/how-do-I-create-an-email-address-or-sender-in-resend) y [permisos de claves API](https://resend.com/docs/api-reference/api-keys/create-api-key).
 - [Idempotencia](https://resend.com/docs/dashboard/emails/idempotency-keys).
+- [Errores de la API](https://resend.com/docs/api-reference/errors), [identificación del cliente HTTP y error 1010](https://resend.com/docs/knowledge-base/403-error-1010) y [logs por clave](https://resend.com/docs/dashboard/api-keys/introduction), consultados el 21/10/2026.
 - [Verificación de webhooks de Resend](https://resend.com/docs/webhooks/verify-webhooks-requests) y [protocolo manual oficial de Svix](https://docs.svix.com/receiving/verifying-payloads/how-manual).
 - [Rebotes](https://resend.com/docs/webhooks/emails/bounced), [quejas](https://resend.com/docs/webhooks/emails/complained) y [supresiones](https://resend.com/docs/webhooks/emails/suppressed).

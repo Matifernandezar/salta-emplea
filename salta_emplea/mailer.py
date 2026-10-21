@@ -26,6 +26,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .domain import public_jobs
 from . import db
+from .mail_provider_errors import provider_error
 
 
 CONFIRM_MAX_AGE = 48 * 60 * 60
@@ -574,6 +575,7 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
             payload['headers'] = {'List-Unsubscribe': f'<{unsubscribe_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'}
         request = Request("https://api.resend.com/emails", data=json.dumps(payload).encode(), method="POST", headers={
             "Authorization": "Bearer " + config["RESEND_API_KEY"], "Content-Type": "application/json",
+            "Accept": "application/json", "User-Agent": "SaltaEmplea/1.0",
             "Idempotency-Key": item["idempotency_key"],
         })
         status = "uncertain"
@@ -592,7 +594,7 @@ def send_outbox(conn, config, *, limit=None, deadline=None):
                 status = "pending"
             else:
                 status = "failed"
-            error = f"Proveedor respondió HTTP {exc.code}."
+            error = provider_error(exc)
         except (TimeoutError, socket.timeout, URLError, OSError):
             error = "Entrega incierta por interrupción de red; revisar el proveedor antes de actuar."
         with _transaction(conn):

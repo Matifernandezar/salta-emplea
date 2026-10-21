@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import admin_nav, status_badge %}
+{% from '_macros.html' import admin_nav, status_badge, mail_status_badge %}
 {% block title %}Administración{% endblock %}
 {% block content %}<div class="container admin-container section-space">
 <div class="page-heading">
@@ -72,7 +72,7 @@
 <section class="admin-section">
 <h2>Correos y tareas</h2>
 <p class="muted">Suscripciones confirmadas: {{ subscribers_count|default('No informado') }}. Consultá el estado de cada envío antes de considerarlo entregado.</p>
-<details class="admin-details">
+<details class="admin-details" id="registro-envios">
 <summary>Registro de envíos</summary>
 <div class="table-wrap">
 <table>
@@ -89,7 +89,7 @@
 <td>N.º {{ item.id }}<span class="table-detail">Intentos: {{ item.attempts }}</span>
 </td>
 <td>{{ item.kind|default(item.type|default('No informado'), true) }}</td>
-<td>{{ status_badge(item.status) }}</td>
+<td>{{ mail_status_badge(item.status) }}</td>
 <td>{{ item.created_at|date }}</td>
 <td>{{ item.last_error|default(item.error|default('No informado'), true) }}</td>
 </tr>{% else %}<tr>

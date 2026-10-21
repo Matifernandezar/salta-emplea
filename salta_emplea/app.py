@@ -476,11 +476,25 @@ def create_app(config=None):
             config['TASK_SOURCE_BATCH'] = 1
             config['TASK_MAIL_BATCH'] = min(3, max(1, int(config.get('TASK_MAIL_BATCH', 10))))
             result = tasks.run_tasks(connection(), config, only=task)
+            app.logger.info('SALTA_TASK_MANUAL %s', json.dumps(operations.task_summary(task, result), sort_keys=True))
             audit('ejecutar_tarea_manual', detail=task)
             if 'skipped' in result:
                 flash('Ya hay una tarea en ejecución. Esta corrida se omitió sin repetir el trabajo.', 'error')
             elif task == 'mail' and not mailer._valid_delivery_config(config):
                 flash('Corrida registrada. No se enviaron correos: falta habilitar la configuración de envío de producción. Los pendientes se conservan.', 'success')
+            elif task == 'mail':
+                delivery = result.get('mail', {})
+                accepted = delivery.get('sent', 0)
+                if accepted:
+                    flash(f'El proveedor aceptó {accepted} correo(s). Esto no confirma su recepción.', 'success')
+                if delivery.get('errors', 0):
+                    flash('El lote registró errores de envío. Revisá Administración → Correos y tareas → Registro de envíos antes de volver a procesar.', 'error')
+                if connection().execute("SELECT 1 FROM outbox WHERE status='uncertain' LIMIT 1").fetchone():
+                    flash('Hay entregas inciertas registradas. Comprobá el proveedor antes de actuar; no se reenviarán automáticamente. Revisá Administración → Correos y tareas → Registro de envíos.', 'error')
+                elif delivery.get('quota_reached'):
+                    flash('Se alcanzó el cupo de correo. Los pendientes se conservan para una próxima corrida con capacidad disponible.', 'error')
+                elif not accepted and not delivery.get('errors', 0):
+                    flash('No hubo nuevas entregas en este lote. Revisá Administración → Correos y tareas → Registro de envíos para consultar los pendientes y sus intentos.', 'success')
             elif task == 'extract' and not image_pipeline.configured(config):
                 flash('La lectura de imágenes está pendiente de configuración. No se enviaron imágenes a ningún proveedor.', 'success')
             else:
