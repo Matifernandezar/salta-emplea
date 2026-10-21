@@ -99,7 +99,9 @@ El cliente identifica la aplicación con `User-Agent` y solicita JSON. Para erro
 
 Después de corregir una causa confirmada de rechazo, se puede solicitar una nueva confirmación de forma explícita. El registro fallido y las reservas anteriores permanecen intactos. Un estado incierto exige conciliar primero con Resend: no renovar solicitudes ni cambiar claves de idempotencia para forzar otra entrega.
 
-Validación real del 21/10/2026: el titular observó un primer intento de confirmación rechazado con HTTP 403 y no recibió el correo. En un diagnóstico posterior, dos consultas GET sin autenticación y sin envío a la API reprodujeron un bloqueo del cliente anterior: el identificador predeterminado recibió HTTP 403 con código 1010; el cliente identificado recibió el HTTP 401 esperado por ausencia de clave. Se añadió identificación propia y se alineó el remitente configurado con el subdominio preparado. Esa comparación no valida credenciales ni recupera el cuerpo del error histórico. Sigue pendiente comprobar un nuevo envío autorizado y completar recepción, resumen y baja; las pruebas locales y CI no sustituyen esa comprobación.
+Validación real del 21/10/2026 (UTC): el titular observó un primer intento de confirmación rechazado con HTTP 403 y no recibió ese correo. En un diagnóstico posterior, dos consultas GET sin autenticación y sin envío a la API reprodujeron un bloqueo del cliente anterior: el identificador predeterminado recibió HTTP 403 con código 1010; el cliente identificado recibió el HTTP 401 esperado por ausencia de clave. Se añadió identificación propia y se alineó el remitente configurado con el subdominio preparado. Esa comparación no recupera el cuerpo del error histórico.
+
+Después del despliegue de la corrección, el titular aportó una captura del correo «Confirmá tus alertas de Salta Emplea» visible en Recibidos de su cuenta autorizada. Queda comprobada la recepción real de esa confirmación. No se conservan en el repositorio la captura, la dirección ni los enlaces privados. Todavía falta observar la confirmación de la suscripción desde el formulario, la recepción del resumen, la ausencia de duplicados y la baja efectiva. Se mantiene la restricción a un único destinatario; la recepción de esta prueba no abre las suscripciones públicas ni acredita la programación automática.
 
 ## Rebotes, quejas y supresión
 
@@ -118,7 +120,7 @@ La supresión no se retira automáticamente por un evento de entrega ni por una 
 
 El ledger guarda hashes de identificador/cuerpo, fecha y resultado fijo; las marcas de supresión guardan hash normalizado de la dirección, fecha y motivo enumerado. Son datos seudónimos, **no anónimos**: protegerlos en los backups y contemplarlos en solicitudes de eliminación. No eliminar el ledger de cuotas del período vigente para reutilizar capacidad. La retención general y eliminación se gestionan con la política de operación; no hay eliminación automática de estas marcas en esta fase.
 
-## Prueba real que falta para el lanzamiento
+## Circuito real y comprobaciones pendientes para el lanzamiento
 
 Solo realizarla después de que el titular autorice expresamente un destinatario, confirme dominio/plan y configure las credenciales privadas. No enviar a terceros ni a direcciones inventadas.
 
