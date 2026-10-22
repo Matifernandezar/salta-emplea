@@ -28,6 +28,8 @@ La carpeta `vista-previa/` conserva la publicación estática anterior, pero ya 
 
 Instagram **@empleosalta12**, Computrabajo y LinkedIn figuran como referencias preparadas en Fuentes, con acceso automático pendiente. Registrarlas no conecta sus publicaciones ni concede permiso de reutilización. Ver [estado y condiciones](docs/FUENTES-ELEGIDAS.md).
 
+Computrabajo conserva la recopilación deshabilitada: la [revisión del 22/10 y guía del circuito manual](docs/COMPUTRABAJO.md) documenta el acceso que falta, las restricciones y las pruebas aisladas. Los aportes manuales usan resumen breve y enlace original, con aprobación obligatoria; no equivalen a búsqueda automática.
+
 Al incorporar texto pegado se preparan campos con etiquetas explícitas, sin proveedor externo ni publicación. Las imágenes iguales se reconocen por la huella de una copia saneada; quedan privadas para revisión. El módulo opcional de lectura usa Google Cloud Vision únicamente con configuración completa, consentimiento para esa imagen y cupo disponible. Conserva texto y evidencia, completa campos vacíos y nunca aprueba ni reemplaza correcciones concurrentes. Sueldos y fechas requieren revisión manual.
 
 La lectura externa está **pausada por decisión del titular desde el 19/10**: se deshabilitó `OCR_ENABLED` y se redesplegó sin leer ni retirar la clave, el cupo de 999 ni el historial. El formulario público ya no ofrece consentimiento de envío a Google. La primera prueba anterior fue rechazada y no hay lectura real exitosa. El ensayo [OCR sin API de pago](docs/OCR-SIN-API.md) encontró errores de tildes y orden de lectura; permanece la transcripción manual. La tarea `extract` no consulta Google mientras esté pausada y no conecta las tres fuentes.

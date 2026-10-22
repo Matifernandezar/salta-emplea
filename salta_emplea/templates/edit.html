@@ -20,6 +20,11 @@
 <p>Compará empresa, puesto, contacto y ubicación antes de aprobar.</p>
 <ul>{% for duplicate in duplicates %}<li>
 <a href="{{ url_for('admin_edit', job_id=duplicate.id) }}">{{ duplicate.title|value }} · {{ duplicate.company|value }}</a>{% if duplicate.reason %} — {{ duplicate.reason }}{% endif %}{% if duplicate.score is defined %} (similitud registrada: {{ duplicate.score }}){% endif %}</li>{% endfor %}</ul>
+</div>{% endif %}{% if computrabajo_offer|default(false) %}<div class="notice">
+<strong>Aporte manual de Computrabajo</strong>
+<p>Incorporá solo datos que tengas permiso de compartir. Prepará un resumen breve de hasta 600 caracteres por campo en descripción y requisitos, conservá el enlace original y comprobá la vigencia antes de aprobar. El aporte queda pendiente; guardar no publica.</p>
+<p>Usá el enlace de una oferta individual de ar.computrabajo.com. No se admiten imágenes ni HTML.</p>
+<p>Este formulario no consulta Computrabajo. El texto externo se conserva como referencia y solo vos editás y aprobás los datos para publicar.</p>
 </div>{% endif %}<div class="review-layout">
 <aside class="paper original-panel">
 <p class="eyebrow">Referencia</p>
@@ -86,7 +91,7 @@
 <h2>Datos para publicar</h2>
 <p class="form-help">Guardá los cambios antes de cambiar el estado. Un cambio sustancial en una oferta aprobada vuelve a revisión.</p>
 <form method="post" enctype="multipart/form-data">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true) }}{% if not job.id %}<label class="field">Imagen original <span class="muted">(opcional)</span>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true, computrabajo=computrabajo_offer|default(false)) }}{% if not job.id and not computrabajo_offer|default(false) %}<label class="field">Imagen original <span class="muted">(opcional)</span>
 <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
 </label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if job.allow_ocr %} checked{% endif %}><span>Opcional: tengo permiso para enviar la imagen a Google Cloud Vision para extraer texto.<small>Se envía solo la imagen y el resultado queda para revisión.</small></span></label>{% else %}<p class="form-help">La imagen se revisará manualmente; la lectura automática no está habilitada.</p>{% endif %}{% endif %}<button class="button" type="submit">Guardar para revisión</button>
 </form>

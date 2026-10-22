@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from . import db
+from . import computrabajo, db
 from zoneinfo import ZoneInfo
 
 
@@ -119,6 +119,8 @@ def _list(value):
 
 
 def _normalize(data):
+    if computrabajo.is_computrabajo_offer(data):
+        data = computrabajo.normalize_manual_offer(data)
     cleaned = {field: _text(data.get(field), 20000 if field in {"original_text", "description", "requirements"} else 2048) for field in FIELDS}
     if not cleaned["title"]:
         raise ValueError("Indicá el puesto antes de incorporar una oferta.")
@@ -322,6 +324,10 @@ def transition_job(conn, job_id, action, actor, acknowledge=False):
             raise ValueError("La oferta no existe.")
         stamp = now()
         if action == "approve":
+            if computrabajo.is_computrabajo_offer(dict(job)):
+                # También protege filas anteriores a esta política: aprobar no
+                # permite sustituir el original por un contacto o dominio ajeno.
+                computrabajo.normalize_manual_offer(dict(job))
             if job['title'] == 'Aviso pendiente de transcripción':
                 raise ValueError('Transcribí el puesto real de la fuente antes de aprobar. El título interno no puede publicarse.')
             if not application_url(job["application_url"]):

@@ -416,3 +416,55 @@ def test_postgres_mail_quota_serializes_workers_and_verified_suppression_is_idem
     assert first.execute('SELECT status FROM subscribers WHERE id=?', (subscriber_id,)).fetchone()[0] == 'unsubscribed'
     assert mailer.is_suppressed(first, email)
     assert first.execute("SELECT COUNT(*) FROM audit WHERE action='mail_reserved'").fetchone()[0] == 1
+
+
+def _computrabajo_offer(**changes):
+    return {
+        'title': 'PRUEBA PostgreSQL Computrabajo', 'company': 'EMPRESA FICTICIA',
+        'location': 'Orán', 'modality': 'presencial',
+        'description': 'Resumen breve ficticio de prueba; no publicar.',
+        'source_name': 'Computrabajo',
+        'source_url': 'https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-editorial',
+        **changes,
+    }
+
+
+def test_postgres_computrabajo_concurrent_manual_intake_has_unique_original(postgres):
+    _, connect = postgres
+    barrier = Barrier(2)
+
+    def incorporate(index):
+        conn = connect()
+        payload = _computrabajo_offer()
+        payload['source_url'] += '?utm_source=PRUEBA-' + str(index)
+        barrier.wait(timeout=10)
+        return domain.create_job(conn, payload, 'administrador')[0]
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        identifiers = list(workers.map(incorporate, range(2)))
+    assert identifiers[0] == identifiers[1]
+    conn = connect()
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 1
+    assert conn.execute('SELECT count(*) FROM provenance').fetchone()[0] == 1
+    row = conn.execute('SELECT * FROM jobs').fetchone()
+    assert row['status'] == 'pending' and row['approved_at'] is None
+    assert row['source_canonical_url'] == row['application_url']
+    assert '?' not in row['source_canonical_url']
+    assert domain.public_jobs(conn) == []
+
+
+def test_postgres_computrabajo_material_change_preserves_editorial_correction(postgres):
+    _, connect = postgres
+    conn = connect()
+    job_id, _ = domain.create_job(conn, _computrabajo_offer(), 'administrador')
+    domain.edit_job(conn, job_id, {'description': 'Resumen corregido por el titular de PRUEBA.'}, 'administrador')
+    domain.transition_job(conn, job_id, 'approve', 'administrador')
+    domain.create_job(connect(), _computrabajo_offer(company='OTRA EMPRESA FICTICIA'), 'recopilador_autorizado')
+    row = connect().execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
+    assert row['status'] == 'pending' and row['approved_at'] is None
+    assert row['description'] == 'Resumen corregido por el titular de PRUEBA.'
+    assert row['company'] == 'EMPRESA FICTICIA'
+    assert row['review_needed'] == 1
+    domain.transition_job(conn, job_id, 'archive', 'administrador')
+    domain.create_job(connect(), _computrabajo_offer(), 'recopilador_autorizado')
+    assert connect().execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] == 'archived'

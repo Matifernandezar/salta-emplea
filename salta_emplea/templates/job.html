@@ -69,7 +69,8 @@
 <div class="aside-card apply-card">
 <p class="eyebrow">El próximo paso</p>
 <h2>Postulate por el canal original</h2>
-<p>No necesitás una cuenta ni subir tu CV a Salta Emplea.</p>{% if job.application_url %}<a class="button button-full" href="{{ job.application_url }}" rel="noopener noreferrer" target="_blank">Postularme <span aria-hidden="true">↗</span>
+<p>No necesitás una cuenta ni subir tu CV a Salta Emplea.</p>{% if computrabajo_offer|default(false) and job.source_url %}<a class="button button-full" href="{{ job.source_url }}" rel="noopener noreferrer" target="_blank">Ver oferta y postularme <span aria-hidden="true">↗</span>
+</a><p class="small">Consultá los detalles, la vigencia y el canal de postulación en el aviso original de Computrabajo.</p>{% elif not computrabajo_offer|default(false) and job.application_url %}<a class="button button-full" href="{{ job.application_url }}" rel="noopener noreferrer" target="_blank">Postularme <span aria-hidden="true">↗</span>
 </a>{% else %}<p class="notice">El contacto de postulación no está informado. Consultá la publicación original.</p>{% endif %}<p class="small">Nunca pagues para postularte. No compartas claves, códigos ni datos bancarios.</p>
 </div>{% if channels.whatsapp_manual or channels.social_manual %}<div class="aside-card">
 <h3>Compartí esta oportunidad</h3>
