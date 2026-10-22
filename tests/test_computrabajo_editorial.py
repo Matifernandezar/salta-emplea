@@ -56,6 +56,15 @@ def test_fuente_repetida_preserva_correccion_y_cambio_material_revoca_aprobacion
     assert domain.public_jobs(conn) == []
 
 
+def test_parametros_desconocidos_no_pierden_identidad_en_la_clave_unica(conn):
+    first, _ = domain.create_job(conn, offer(source_url=ORIGINAL + '?id=2&id=1&utm_source=PRUEBA'), 'administrador')
+    second, _ = domain.create_job(conn, offer(source_url=ORIGINAL + '?id=1&id=2'), 'administrador')
+    repeated, _ = domain.create_job(conn, offer(source_url=ORIGINAL + '?id=2&id=1&utm_campaign=PRUEBA'), 'administrador')
+    assert first != second and repeated == first
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 2
+    assert conn.execute('SELECT source_canonical_url FROM jobs WHERE id=?', (first,)).fetchone()[0] == ORIGINAL + '?id=2&id=1'
+
+
 def test_un_aporte_publico_falso_no_retira_una_oferta_aprobada(conn):
     job_id, _ = domain.create_job(conn, offer(), 'administrador')
     domain.transition_job(conn, job_id, 'approve', 'administrador')

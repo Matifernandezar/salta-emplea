@@ -119,7 +119,8 @@ def _list(value):
 
 
 def _normalize(data):
-    if computrabajo.is_computrabajo_offer(data):
+    computrabajo_offer = computrabajo.is_computrabajo_offer(data)
+    if computrabajo_offer:
         data = computrabajo.normalize_manual_offer(data)
     cleaned = {field: _text(data.get(field), 20000 if field in {"original_text", "description", "requirements"} else 2048) for field in FIELDS}
     if not cleaned["title"]:
@@ -135,7 +136,9 @@ def _normalize(data):
         cleaned["source_url"] = application_url(cleaned["source_url"])
         if cleaned["source_url"].startswith("mailto:"):
             raise ValueError("La URL de la fuente debe usar HTTPS.")
-    cleaned["source_canonical_url"] = canonical_url(cleaned["source_url"])
+    # El validador de esta fuente solo retira seguimiento conocido. No ordenar
+    # parámetros desconocidos: el orden de valores repetidos puede ser identidad.
+    cleaned["source_canonical_url"] = cleaned["source_url"] if computrabajo_offer else canonical_url(cleaned["source_url"])
     for field in ("original_date", "last_checked_at", "expires_at"):
         cleaned[field] = _date(cleaned[field], field)
     salary = [cleaned[field] for field in ("salary_amount", "salary_currency", "salary_period")]

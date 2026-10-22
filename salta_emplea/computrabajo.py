@@ -7,7 +7,7 @@ circuito editorial existente.
 
 import re
 from html import unescape
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit, urlunsplit
 
 
 HOST = "ar.computrabajo.com"
@@ -37,7 +37,8 @@ def valid_original_url(value) -> str:
     """Devuelve el detalle original canónico; rechaza listados y otros hosts.
 
     Se quitan únicamente el fragmento y parámetros de seguimiento conocidos.
-    Los demás parámetros, incluidos los repetidos o vacíos, se conservan.
+    Los demás parámetros conservan su orden y representación, incluidos los
+    repetidos, vacíos o sin signo igual: pueden participar en la identidad.
     """
     error = "Usá el enlace HTTPS original de una oferta de ar.computrabajo.com."
     if not isinstance(value, str) or not value or len(value) > 2048:
@@ -72,14 +73,19 @@ def valid_original_url(value) -> str:
     if not decoded_path.removeprefix("/ofertas-de-trabajo/oferta-de-trabajo-").strip(".-"):
         raise ValueError(error)
     try:
-        query = sorted(
-            (key, val)
-            for key, val in parse_qsl(parsed.query, keep_blank_values=True, errors="strict")
-            if not key.casefold().startswith("utm_") and key.casefold() not in {"fbclid", "gclid"}
-        )
+        # Validar la codificación no autoriza a reordenar ni a recodificar
+        # parámetros desconocidos: incluso el orden repetido puede identificar
+        # una oferta distinta. Sólo se retiran componentes de seguimiento.
+        parse_qsl(parsed.query, keep_blank_values=True, errors="strict")
+        components = []
+        for component in parsed.query.split("&"):
+            key = unquote_plus(component.partition("=")[0], errors="strict").casefold()
+            if not key.startswith("utm_") and key not in {"fbclid", "gclid"}:
+                components.append(component)
+        query = "&".join(components)
     except (UnicodeError, ValueError) as exc:
         raise ValueError(error) from exc
-    return urlunsplit(("https", HOST, path, urlencode(query), ""))
+    return urlunsplit(("https", HOST, path, query, ""))
 
 
 def _brief_text(value, field, limit):

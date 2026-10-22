@@ -46,7 +46,21 @@ def test_declared_name_also_enforces_source_policy():
 
 def test_canonical_original_removes_tracking_but_preserves_identity_parameters():
     supplied = DETAIL.replace("ar.computrabajo.com", "AR.COMPUTRABAJO.COM:443") + "/?utm_source=prueba&ID=7&fbclid=a&gclid=b&UTM_MEDIUM=local&id=9&id=8&v=#fragmento"
-    assert computrabajo.valid_original_url(supplied) == DETAIL + "?ID=7&id=8&id=9&v="
+    assert computrabajo.valid_original_url(supplied) == DETAIL + "?ID=7&id=9&id=8&v="
+
+
+def test_unknown_parameter_order_and_representation_are_part_of_identity():
+    first = DETAIL + "?id=2&id=1&v=&flag&text=a%20b&UTM_SOURCE=prueba&z=+"
+    second = DETAIL + "?id=1&id=2&v=&flag&text=a%20b&z=+"
+    assert computrabajo.valid_original_url(first) == DETAIL + "?id=2&id=1&v=&flag&text=a%20b&z=+"
+    assert computrabajo.valid_original_url(first) != computrabajo.valid_original_url(second)
+    with pytest.raises(ValueError, match="mismo enlace original"):
+        computrabajo.normalize_manual_offer(manual_offer(source_url=first, application_url=second))
+
+
+def test_only_tracking_parameters_are_removed_even_when_keys_are_encoded():
+    supplied = DETAIL + "?id=2&utm%5Fsource=prueba&&id=1&%66bclid=prueba&v&gclid=prueba"
+    assert computrabajo.valid_original_url(supplied) == DETAIL + "?id=2&&id=1&v"
 
 
 @pytest.mark.parametrize("url", [
