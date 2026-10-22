@@ -423,7 +423,8 @@ def run_computrabajo_circuit(browser, viewport):
             page = context.new_page()
             page.goto(origin + '/admin/ingresar')
             page.locator('[name="password"]').fill(PASSWORD)
-            page.get_by_role('button', name='Ingresar', exact=True).click()
+            page.get_by_role('button', name='Ingresar →', exact=True).click()
+            expect(page).to_have_url(origin + '/admin')
             for path in ('/admin/fuentes', '/admin/automatizacion'):
                 assert page.goto(origin + path).status == 200
                 section = page.locator('section[aria-labelledby="computrabajo-heading"]')
