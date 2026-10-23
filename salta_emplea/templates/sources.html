@@ -45,7 +45,7 @@
 <dl class="metadata-list">
 <div><dt>Acceso revisado</dt><dd>{{ ct.research_date|default('2026-10-22', true) }}. Esta revisión no acredita una conexión operativa.</dd></div>
 <div><dt>Última corrida de Computrabajo</dt><dd>{% if ct.last_run_at %}{{ ct.last_run_at|value }}. Consultá su resultado en el registro de corridas.{% else %}Sin corrida registrada. No se comprobó una consulta automática.{% endif %}</dd></div>
-<div><dt>Próxima corrida de Computrabajo</dt><dd>{% if ct.next_run_at %}{{ ct.next_run_at|value }}{% else %}Sin programación: la recopilación automática está deshabilitada.{% endif %}</dd></div>
+<div><dt>Próxima corrida de Computrabajo</dt><dd>{% if ct.next_run_at %}{{ ct.next_run_at|value }}{% elif ct.apify_configured %}Programación externa en Apify; no comprobada desde este panel.{% else %}Sin programación: la recopilación automática está deshabilitada.{% endif %}</dd></div>
 </dl>
 <button class="button button-outline" type="button" disabled aria-describedby="computrabajo-blocked">Recopilar Computrabajo</button>
 <p><a class="text-link" href="{{ url_for('admin_new', source_preset='computrabajo-salta') }}">Incorporar aviso de Computrabajo →</a></p>

@@ -113,7 +113,7 @@ def test_postgres_migrations_rows_transactions_and_private_uploads(postgres):
     target, connect = postgres
     db.init_db(target)
     conn = connect()
-    assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
     assert conn.execute("SELECT fold(?)", ("TÉCNICO en Orán",)).fetchone()[0] == "tecnico en oran"
     assert not conn.in_transaction
@@ -468,3 +468,75 @@ def test_postgres_computrabajo_material_change_preserves_editorial_correction(po
     domain.transition_job(conn, job_id, 'archive', 'administrador')
     domain.create_job(connect(), _computrabajo_offer(), 'recopilador_autorizado')
     assert connect().execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] == 'archived'
+
+
+def test_apify_concurrencia_identidad_y_reintento_en_postgres(postgres, monkeypatch):
+    """PostgreSQL real; dataset y HTTP sustituidos, sin consultas a Apify."""
+    import json
+    import time
+    from pathlib import Path
+    from salta_emplea import apify_computrabajo as apify
+    target, connection = postgres
+    records = json.loads((Path(__file__).parent / 'fixtures/apify_computrabajo_contract.json').read_text())
+    actor_id = 'ActorPRUEBA000001'
+    config = {'APIFY_API_TOKEN': 'PRUEBA', 'APIFY_COMPUTRABAJO_ACTOR_ID': apify.ACTOR}
+    def fetch(path, *_args):
+        if path.startswith('acts/'):
+            return {'data': {'id': actor_id, 'username': 'unfenced-group', 'name': 'computrabajo-com-job-scraper'}}
+        if path.startswith('actor-runs/'):
+            return {'data': {'id': path.split('/')[1], 'actId': actor_id, 'status': 'SUCCEEDED',
+                             'defaultDatasetId': 'DatasetPRUEBA01'}}
+        time.sleep(.01)
+        return records
+    monkeypatch.setattr(apify, 'fetch_json', fetch)
+    barrier = Barrier(2)
+    def run(number):
+        conn = connection()
+        barrier.wait(timeout=10)
+        try:
+            return apify.process_run(conn, config, 'RunPRUEBA' + str(number))
+        except apify.ImportFailure as exc:
+            assert exc.code == 'import_busy'
+            return None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(run, (1, 2)))
+    assert any(item and item['imported'] == 5 for item in outcomes)
+    conn = connection()
+    for number in (1, 2):
+        apify.process_run(conn, config, 'RunPRUEBA' + str(number))
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 5
+    assert conn.execute('SELECT count(*) FROM external_jobs').fetchone()[0] == 5
+    assert conn.execute("SELECT count(*) FROM jobs WHERE status='pending'").fetchone()[0] == 5
+    assert conn.execute("SELECT count(*) FROM apify_import_runs WHERE status='succeeded'").fetchone()[0] == 2
+    # La restricción de identidad existe en PostgreSQL, además del bloqueo.
+    with pytest.raises(Exception):
+        with conn:
+            conn.execute('INSERT INTO external_jobs SELECT * FROM external_jobs LIMIT 1')
+
+
+def test_apify_cursor_atomicidad_por_registro_en_postgres(postgres, monkeypatch):
+    import json
+    from pathlib import Path
+    from salta_emplea import apify_computrabajo as apify
+    _target, connection = postgres
+    conn = connection()
+    records = json.loads((Path(__file__).parent / 'fixtures/apify_computrabajo_contract.json').read_text())
+    monkeypatch.setattr(apify, '_dataset', lambda *_args: (records, 'DatasetPRUEBA01', 'ActorPRUEBA01'))
+    original = apify.import_record
+    calls = []
+    def fail_inside_transaction(*args):
+        result = original(*args)
+        calls.append(1)
+        if len(calls) == 3:
+            raise RuntimeError('PRUEBA: fallo después de insertar, antes del cursor')
+        return result
+    monkeypatch.setattr(apify, 'import_record', fail_inside_transaction)
+    with pytest.raises(apify.ImportFailure, match='import_failed'):
+        apify.process_run(conn, {}, 'RunPRUEBA01')
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 2
+    assert conn.execute('SELECT count(*) FROM external_jobs').fetchone()[0] == 2
+    assert conn.execute('SELECT cursor FROM apify_import_runs').fetchone()[0] == 2
+    monkeypatch.setattr(apify, 'import_record', original)
+    result = apify.process_run(conn, {}, 'RunPRUEBA01')
+    assert result['imported'] == 5 and result['processed'] == 5
+    assert conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 5

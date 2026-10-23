@@ -13,9 +13,9 @@ from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit, urlunsplit
 HOST = "ar.computrabajo.com"
 RESEARCH_DATE = "2026-10-22"
 ACCESS_REASON = (
-    "No hay una API de lectura ni permisos de redistribución verificados para "
-    "configurar la importación automática de Computrabajo. Podés aportar "
-    "manualmente un resumen breve y el enlace original para revisión."
+    "El importador Apify está preparado; faltan configuración y una recepción "
+    "verificada. La búsqueda se programa en Apify: este panel no inicia el actor. "
+    "Podés aportar manualmente un resumen breve y el enlace original para revisión."
 )
 
 

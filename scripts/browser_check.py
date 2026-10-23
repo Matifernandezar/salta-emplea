@@ -1,5 +1,6 @@
 """QA Chromium aislado con datos PRUEBA; la comprobación pública es solo lectura."""
 import argparse
+import json
 from contextlib import contextmanager
 from io import BytesIO
 import logging
@@ -20,7 +21,7 @@ from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
-from salta_emplea import db, domain, extraction
+from salta_emplea import apify_computrabajo, db, domain, extraction
 from salta_emplea.app import create_app
 
 PASSWORD = 'PRUEBA-contraseña-ficticia-solo-navegador'
@@ -483,6 +484,60 @@ def run_computrabajo_circuit(browser, viewport):
             context.close()
 
 
+def run_apify_circuit(browser, viewport):
+    """HTTP/SQL/Chromium reales locales; transporte Apify sustituido."""
+    fixture = json.loads((ROOT / 'tests/fixtures/apify_computrabajo_contract.json').read_text())
+    secret = 'PRUEBA-webhook-aislado-no-es-una-clave-real'
+    def provider(path, *_args):
+        if path.startswith('acts/'):
+            return {'data': {'id': 'ActorPRUEBA01', 'username': 'unfenced-group', 'name': 'computrabajo-com-job-scraper'}}
+        if path.startswith('actor-runs/'):
+            return {'data': {'id': 'RunPRUEBA01', 'actId': 'ActorPRUEBA01', 'status': 'SUCCEEDED', 'defaultDatasetId': 'DatasetPRUEBA01'}}
+        assert path == 'datasets/DatasetPRUEBA01/items?format=json&limit=51&clean=false'
+        return fixture
+    with isolated_server() as (app, origin), patch.object(apify_computrabajo, 'fetch_json', provider):
+        app.config.update(APIFY_API_TOKEN='PRUEBA', APIFY_COMPUTRABAJO_ACTOR_ID=apify_computrabajo.ACTOR,
+                          APIFY_WEBHOOK_SECRET=secret)
+        context = browser.new_context(viewport=viewport, service_workers='block')
+        unexpected = []
+        context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/')
+                      else (unexpected.append(urlsplit(route.request.url).hostname), route.abort()))
+        try:
+            endpoint = origin + '/api/webhooks/apify/computrabajo'
+            assert context.request.post(endpoint, data={}).status == 401
+            event = {'eventType': 'ACTOR.RUN.SUCCEEDED', 'resource': {'id': 'RunPRUEBA01'}}
+            response = context.request.post(endpoint, data=event, headers={'Authorization': 'Bearer ' + secret})
+            assert response.status == 200 and response.json()['imported'] == 5
+            repeated = context.request.post(endpoint, data=event, headers={'Authorization': 'Bearer ' + secret})
+            assert repeated.status == 200 and repeated.json()['imported'] == 0
+            imported = rows(app, 'SELECT id,status FROM jobs ORDER BY id')
+            assert len(imported) == 5 and all(item['status'] == 'pending' for item in imported)
+            job_id = imported[0]['id']
+            page = context.new_page()
+            assert page.goto(f'{origin}/ofertas/{job_id}').status == 404
+            page.goto(origin + '/admin/ingresar')
+            page.locator('[name="password"]').fill(PASSWORD)
+            page.get_by_role('button', name='Ingresar →', exact=True).click()
+            expect(page).to_have_url(origin + '/admin')
+            page.goto(f'{origin}/admin/ofertas/{job_id}')
+            if page.locator('[name="acknowledge"]').count():
+                page.locator('[name="acknowledge"]').check()
+            page.get_by_role('button', name='Aprobar y publicar').click()
+            context.clear_cookies()
+            assert page.goto(f'{origin}/ofertas/{job_id}').status == 200
+            apply = page.get_by_role('link', name='Ver oferta y postularme en Computrabajo')
+            expect(apply).to_have_attribute('href', fixture[0]['jobUrl'])
+            expect(apply).to_have_attribute('rel', 'noopener noreferrer')
+            assert 'candidato.ar.computrabajo.com' not in page.content()
+            no_horizontal_overflow(page)
+            page.screenshot(path=str(CAPTURES / f'local-apify-ficha-{viewport["width"]}.png'), full_page=True)
+            assert not unexpected
+            print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; webhook Apify autenticado, '
+                  'cinco pendientes, reintento sin duplicados y aprobación manual. Apify sustituido; sin acceso real al dataset.')
+        finally:
+            context.close()
+
+
 def check_access_helper(browser, target=None):
     """Archivo local, contraseña PRUEBA; nunca imprime ni captura los resultados."""
     import re
@@ -675,6 +730,7 @@ def main():
                 run_circuit(browser, viewport)
                 run_image_circuit(browser, viewport)
                 run_computrabajo_circuit(browser, viewport)
+                run_apify_circuit(browser, viewport)
             check_access_helper(browser)
             if args.check_public:
                 mode = check_public(browser)

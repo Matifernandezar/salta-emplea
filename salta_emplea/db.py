@@ -10,6 +10,7 @@ import sqlite3
 import threading
 import unicodedata
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -21,6 +22,7 @@ _EDITORIAL_LOCK = 6000001001
 _MAILER_LOCK = 6000001002
 _MIGRATION_LOCK = 6000001003
 _MEMORY_TASK_LOCK = threading.Lock()
+SCHEMA_VERSION = 2
 
 
 def is_postgres(target):
@@ -307,10 +309,14 @@ def init_db(path):
                 conn.execute("SELECT pg_advisory_xact_lock(?)", (_MIGRATION_LOCK,))
                 conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
                 version = conn.execute("SELECT COALESCE(MAX(version),0) FROM schema_migrations").fetchone()[0]
-                if version > 1:
+                if version > SCHEMA_VERSION:
                     raise RuntimeError("La base usa una versión más nueva que esta aplicación.")
                 if version == 0:
                     conn.executescript(Path(__file__).with_name("schema_postgres.sql").read_text(encoding="utf-8"))
+                if version < 2:
+                    conn.executescript(Path(__file__).with_name("migration_002.sql").read_text(encoding="utf-8"))
+                    conn.execute("INSERT INTO schema_migrations(version,applied_at) VALUES (2,?)",
+                                 (datetime.now(timezone.utc).isoformat(timespec="seconds"),))
         finally:
             conn.close()
         return
@@ -319,10 +325,13 @@ def init_db(path):
     conn = connect(path)
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 1:
+        if version > SCHEMA_VERSION:
             raise RuntimeError("La base usa una versión más nueva que esta aplicación.")
         if version == 0:
             conn.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
             conn.commit()
+        if version < 2:
+            script = Path(__file__).with_name("migration_002.sql").read_text(encoding="utf-8")
+            conn.executescript("BEGIN IMMEDIATE;\n" + script + "\nINSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES (2,CURRENT_TIMESTAMP);\nPRAGMA user_version=2;\nCOMMIT;")
     finally:
         conn.close()

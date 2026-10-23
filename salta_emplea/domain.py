@@ -10,6 +10,7 @@ import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from contextlib import nullcontext
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from . import computrabajo, db
@@ -230,14 +231,24 @@ def job_dict(row):
     return data
 
 
-def create_job(conn, data, actor="comunidad"):
+def create_job(conn, data, actor="comunidad", *, in_transaction=False, existing_job_id=None, force_review=False):
+    # El importador compone oferta, identidad externa y cursor en una transacción.
+    # Los formularios públicos nunca controlan estos argumentos ni el actor.
+    if (existing_job_id is not None or force_review) and actor not in TRUSTED_IMPORT_ACTORS:
+        raise ValueError("La identidad externa exige un recopilador autorizado.")
+    if in_transaction and not conn.in_transaction:
+        raise RuntimeError("La incorporación requiere una transacción activa.")
     cleaned = _normalize(data)
     stamp = now()
-    with conn:
+    with (nullcontext() if in_transaction else conn):
         # Reservar la escritura antes del control evita una carrera entre dos recolectores.
         db.editorial_lock(conn)
-        if cleaned["source_canonical_url"]:
-            existing = conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone()
+        if cleaned["source_canonical_url"] or existing_job_id is not None:
+            existing = (conn.execute("SELECT * FROM jobs WHERE id=?", (existing_job_id,)).fetchone()
+                        if existing_job_id is not None else
+                        conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone())
+            if existing_job_id is not None and existing is None:
+                raise ValueError("La oferta externa vinculada no existe.")
             if existing:
                 baseline = _import_baseline(conn, existing)
                 _provenance(conn, existing["id"], cleaned)
@@ -245,6 +256,8 @@ def create_job(conn, data, actor="comunidad"):
                 # la fuente anterior evita retirar otra vez por una corrección
                 # editorial que ya fue aprobada explícitamente.
                 changed = [field for field in MATERIAL_FIELDS if cleaned.get(field) != baseline.get(field)]
+                if force_review:
+                    changed.append("source_content_hash")
                 # Las contribuciones públicas jamás pueden retirar una oferta:
                 # podrían contener cambios falsos o reproducir una URL ajena.
                 trusted_actor = actor in TRUSTED_IMPORT_ACTORS

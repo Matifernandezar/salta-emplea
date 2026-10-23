@@ -18,7 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import computrabajo, db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
+from . import apify_computrabajo, computrabajo, db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
 from .config import load_env
 
 
@@ -34,6 +34,9 @@ def create_app(config=None):
         DATABASE_URL=os.environ.get('DATABASE_URL', ''),
         SERVERLESS=os.environ.get('VERCEL') == '1',
         CRON_SECRET=os.environ.get('CRON_SECRET', ''),
+        APIFY_API_TOKEN=os.environ.get('APIFY_API_TOKEN', ''),
+        APIFY_COMPUTRABAJO_ACTOR_ID=os.environ.get('APIFY_COMPUTRABAJO_ACTOR_ID', ''),
+        APIFY_WEBHOOK_SECRET=os.environ.get('APIFY_WEBHOOK_SECRET', ''),
         UPLOAD_DIR=os.environ.get('UPLOAD_DIR', str(Path(app.instance_path) / 'uploads')),
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', ''),
         PUBLIC_RESPONSIBLE_NAME=os.environ.get('PUBLIC_RESPONSIBLE_NAME', ''),
@@ -98,6 +101,7 @@ def create_app(config=None):
         return g.db
 
     app.register_blueprint(mail_webhooks.create_blueprint(connection))
+    app.register_blueprint(apify_computrabajo.create_blueprint(connection))
 
     @app.teardown_appcontext
     def close_db(_error=None):
@@ -153,7 +157,7 @@ def create_app(config=None):
     def protect():
         # La firma del proveedor reemplaza CSRF exclusivamente en este endpoint.
         # El blueprint la verifica antes de abrir la base o procesar datos.
-        if request.endpoint == 'mail_webhooks.resend':
+        if request.endpoint in {'mail_webhooks.resend', 'apify_webhooks.receive'}:
             return
         if request.method == 'POST':
             supplied = request.form.get('csrf_token', '')
@@ -172,7 +176,7 @@ def create_app(config=None):
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         if production:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'
-        if request.path.startswith(('/admin', '/alertas/', '/api/cron/')):
+        if request.path.startswith(('/admin', '/alertas/', '/api/cron/', '/api/webhooks/')):
             response.headers['Cache-Control'] = 'no-store'
             response.headers['Referrer-Policy'] = 'no-referrer'
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
@@ -210,7 +214,13 @@ def create_app(config=None):
                 'source_url': source['url'], 'source_name': source['name'],
             })
         reference = next((source for source in records if source['is_computrabajo']), None)
-        return records, computrabajo.access_state(reference)
+        state = computrabajo.access_state(reference)
+        if all(app.config.get(key) for key in ('APIFY_API_TOKEN', 'APIFY_COMPUTRABAJO_ACTOR_ID', 'APIFY_WEBHOOK_SECRET')):
+            last = connection().execute('SELECT started_at,finished_at,status FROM apify_import_runs ORDER BY started_at DESC LIMIT 1').fetchone()
+            state.update(label='Apify: variables presentes', apify_configured=True,
+                         reason='La presencia de variables no verifica credenciales ni programación. Apify ejecuta la búsqueda; el webhook recibe el resultado. Revisá la tarea apify_computrabajo en el registro de corridas.',
+                         last_run_at=(last['finished_at'] or last['started_at']) if last else None)
+        return records, state
 
     def settings_dict():
         # El registro de webhooks y supresiones comparte la tabla: las páginas

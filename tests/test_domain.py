@@ -47,7 +47,7 @@ class DomainTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0], 0)
         self.assertEqual(self.conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
         self.assertEqual(self.conn.execute("PRAGMA journal_mode").fetchone()[0], "wal")
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 2)
 
     def test_whole_editorial_flow_and_unpublished_visibility(self):
         job_id = self.create()

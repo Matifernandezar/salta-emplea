@@ -1,97 +1,76 @@
-# Computrabajo: acceso pendiente y circuito manual revisable
+# Computrabajo mediante Apify: recepción y aprobación
 
-Revisión inicial: **22/10/2026, UTC**. Acceso revalidado el **23/10/2026**. Esta entrega prepara código y PR; no activa consultas, fusiona cambios ni modifica producción. La búsqueda automática **no está implementada ni verificada**: falta acceso permitido y una respuesta real sobre la que construir el adaptador.
+Implementación en PR #2. **No está activada ni desplegada en producción.** Apify ejecuta la búsqueda; Flask recibe su resultado terminado y descarga el dataset por la API de Apify. Vercel no scrapea Computrabajo ni inicia actores. Cada oferta nueva queda `pending` y solo el titular puede aprobarla.
 
-## Decisión y evidencia de acceso real
+## Evidencia y límites de esta entrega
 
-El agente de acceso hizo tres búsquedas dirigidas, priorizando documentación oficial de lectura y evaluando un único proveedor alternativo. No encontró una API/feed oficial utilizable para consultar y reutilizar ofertas ajenas. Esto no prueba que no exista una integración privada por acuerdo.
+El titular informó una prueba real del actor `unfenced-group/computrabajo-com-job-scraper` y comunicó sus campos. Una consulta GET real a la API pública de Apify confirmó nombre, usuario e ID `KsjqLGTcOBBib2Xic`. Eso verifica identidad, **no una importación real**.
 
-- [Aviso legal de Computrabajo Argentina](https://ar.computrabajo.com/avisolegal/): la apertura real devolvió comprobación JavaScript/antirrobot. No se leyó el texto completo ni se eludió el control. Enlazar al original no concede permiso para extraer o copiar contenido.
-- [Techmap: datos de Computrabajo](https://jobdatafeeds.com/data/portals/computrabajo) y [quickstart oficial del proveedor](https://api.techmap.io/quickstart): documentan selección del portal y exigen suscripción/clave RapidAPI. No se aportó acceso existente; no se crearon cuentas ni se consultó una muestra de avisos.
-- [Facturación de Techmap](https://api.techmap.io/errors-and-billing): anuncia Basic USD 0 con 100 consultas mensuales y excedentes automáticos de USD 0,06 por consulta. No es un tope de gasto ni una contratación recomendada. Impuestos, consumo compartido y límites de la cuenta concreta no comprobados. No se contrató ni habilitó consumo.
-- [Términos de Techmap](https://jobdatafeeds.com/terms), versión 08/06/2026: los derechos sobre datos dependen del acuerdo de suscripción. Una oferta comercial de datos no acredita por sí sola autorización de Computrabajo para republicarlos en este sitio.
-- [Campos](https://api.techmap.io/field-reference) y [paginación](https://api.techmap.io/pagination-and-limits): describen `result`, `title`, `company`, `city`, `state`, `portal`, `source`, fechas y `jsonLD.description/url`; páginas de diez resultados con `page` desde uno o cursor. Son documentación, no un contrato validado mediante respuesta real. No se comprobó cobertura de Salta, URL original concreta ni actualización efectiva.
+El JSON saneado de cinco ofertas se solicitó y aún no fue aportado. `tests/fixtures/apify_computrabajo_contract.json` es una fixture **sintética de contrato**, rotulada PRUEBA, con el esquema comunicado y corroborado en la documentación. No se presenta como resultado recibido del proveedor. Falta probar con ese JSON y con una corrida propia terminada; no se iniciaron actores, crearon cuentas ni configuraron servicios de producción.
 
-No se usaron proxies alternativos, resolución de captchas, sesiones privadas ni cuentas nuevas. No se pidió ampliar privilegios ni entregar secretos por chat. No se agregaron otras fuentes.
+La [investigación anterior](https://github.com/Matifernandezar/salta-emplea/blob/94800b9a90215f0c26054073593b90d455661107/docs/COMPUTRABAJO.md) conserva la evaluación histórica de acceso oficial, Techmap y TheirStack. Este actor es de un tercero; su presencia en Apify no equivale a una API oficial de Computrabajo ni certifica derechos ajenos. Solo se publica el resumen y el enlace que el titular revisa, sin CV ni imágenes importadas.
 
-## Revalidación de acceso: 23/10/2026
+## Contrato y reglas
 
-La [PR #2](https://github.com/Matifernandezar/salta-emplea/pull/2) continúa abierta, lista para revisión y sin fusionar; su código permanece en `147646185259a8cae1401603556c5ef710aa88e8`. Está implementada la incorporación manual, no la búsqueda automática. Esta actualización modifica únicamente este documento, sin repetir pruebas del circuito manual ni añadir un adaptador sin respuesta real.
+- `jobId`: identidad persistente en `external_jobs`, con clave única por fuente e ID. IDs hexadecimales de 32 caracteres se normalizan a minúsculas. Una oferta ya existente por URL se vincula sin duplicarla.
+- `jobUrl`: único origen y destino permitido. Se valida HTTPS, host exacto `ar.computrabajo.com` y ruta de detalle; se quitan fragmento y seguimiento conocido. Se conserva la identidad de otros parámetros. El CTA dice **«Ver oferta y postularme en Computrabajo»**.
+- `title`, `companyName`, `location`: datos de ficha, sin completar faltantes. `countryCode` debe ser exactamente `ar`.
+- Ubicación: provincia Salta explícita, o una localidad reconocida por la lista conservadora del adaptador. Se contemplan Capital, General Güemes, Tartagal, Orán, Cafayate y otras localidades; nombres ambiguos como San Lorenzo necesitan provincia. Se rechazan otras provincias explícitas. No se busca la palabra Salta en título o descripción.
+- `descriptionText`: se eliminan etiquetas y contenido de scripts/estilos; se calcula un resumen determinista de hasta 600 caracteres, sin IA. No se almacena ni publica la descripción completa o HTML. El contenido es dato, nunca instrucciones ejecutables.
+- `contentHash` y una huella local de los campos materiales detectan cambios incluso fuera del resumen. La nueva versión queda en procedencia/auditoría; una oferta aprobada vuelve a pendiente sin sobrescribir la preparación editorial. Rechazadas, archivadas y vencidas no se reabren.
+- `scrapedAt`: se conserva como evidencia del actor cuando es un ISO con zona horaria válido. Se distingue de la recepción del servidor y de la revisión editorial. `publishDate` queda como texto privado sin interpretar.
+- **`applyUrl` y `publishDateISO` se ignoran por completo**. No se guardan en procedencia ni se utilizan como destino, fecha original o vencimiento. La fecha original permanece no informada hasta revisión del titular.
+- Ausencia del dataset, error, bloqueo o caída del proveedor nunca archivan ni despublican ofertas. Jobicy y los vencimientos explícitos existentes no se cambian.
 
-Se trabajó sin subagentes y con **cinco búsquedas dirigidas**: tres sobre acceso oficial (API de lectura, acuerdos/feeds y la distinción con Pandapé), una sobre Techmap y una sobre TheirStack. Las aperturas posteriores verificaron documentación primaria; no hubo más búsquedas ni se evaluaron otros proveedores.
+## Endpoint y seguridad
 
-| Vía | Evidencia comprobada y límite |
-|---|---|
-| Computrabajo oficial | No se encontró una API/feed público utilizable para leer ofertas ajenas. Un SDK antiguo menciona `iapi.computrabajo.com`; al abrir ese [host oficial](https://iapi.computrabajo.com/), redirigió a la portada, sin documentación de lectura ni autorización de reutilización. El [aviso legal argentino](https://ar.computrabajo.com/avisolegal/) volvió a mostrar un control JavaScript/antirrobot. No se eludió ni se probaron endpoints privados. Las integraciones de reclutamiento/publicación de ofertas propias no resuelven la lectura de avisos ajenos. |
-| Techmap: cobertura e identidad | La [ficha de Computrabajo](https://jobdatafeeds.com/data/portals/computrabajo) documenta `portal=computrabajo`, filtros `countryCode`/`city` y recopilación continua. El [catálogo argentino](https://jobdatafeeds.com/data/countries/ar) confirma Argentina en el conjunto general, pero no demuestra la intersección Computrabajo–Salta ni cobertura de Capital, Orán, Tartagal u otras localidades. Los campos de fuente/URL y fechas ya documentados arriba no fueron contrastados con una respuesta recibida. No se comprobó una frecuencia o latencia garantizada para Salta. |
-| Techmap: acceso, derechos y costo | El [quickstart](https://api.techmap.io/quickstart) exige suscripción y clave RapidAPI tanto para JSON como para RSS: no es un feed anónimo. Los [términos](https://jobdatafeeds.com/terms) remiten los derechos de los datos al acuerdo de suscripción; falta comprobar que el aplicable permita nuestra vidriera. La [documentación de facturación](https://api.techmap.io/errors-and-billing) publica Basic USD 0/mes, 100 consultas/mes, diez ofertas por consulta, una consulta/segundo y USD 0,06 por consulta adicional, sin tope duro. La página autoritativa de precios de RapidAPI enlazada allí no devolvió una tabla legible; no se verificaron condiciones de una cuenta, impuestos ni posibles cargos de transferencia. Ningún plan se activó. |
-| TheirStack: cobertura e identidad | Su [ficha de Computrabajo](https://theirstack.com/en/job-posting-api/data-source/computrabajo) anuncia ese origen y cobertura global; no acredita ofertas de Argentina/Salta recibidas. La [referencia de búsqueda](https://theirstack.com/en/docs/api-reference/jobs/search_jobs_v1) documenta ID, `url`, `source_url`, ubicación estructurada, `date_posted` y `discovered_at`, además de filtro `url_domain_or` sobre las URLs. Son esquemas y ejemplos, no una muestra real. Sigue pendiente comprobar una URL original argentina y distinguir provincia/localidad; no se verificó latencia de actualización de Computrabajo en Salta. |
-| TheirStack: acceso, derechos y costo | Los [términos, §4.3](https://theirstack.com/en/docs/legal/terms-and-conditions) permiten expresamente republicar y mostrar ofertas en portales públicos indexables; siguen aplicando las restricciones de competencia, redistribución y conservación, especialmente §4.10–4.12. Esto mejora la evidencia de permiso frente a una simple página comercial, pero no crea acceso ni confirma la cobertura. La [autenticación](https://theirstack.com/en/docs/api-reference/authentication) requiere cuenta y clave. Los [precios](https://theirstack.com/en/pricing) muestran 1500 créditos API por USD 49/mes, un crédito por oferta, cuatro consultas/segundo y hasta 500 resultados/página. Ese plan excede el presupuesto total de USD 30. La página anuncia prueba gratuita, pero no se verificaron su cuota efectiva, continuidad, excedentes, impuestos ni condiciones de una cuenta. No se tomó una suscripción. |
+`POST /api/webhooks/apify/computrabajo`
 
-**Resultado y siguiente acción:** no se consiguió acceso autenticado ni se recibieron ofertas de Salta. No se ejecutó una importación real ni su reprocesamiento; las pruebas históricas de la PR no acreditan acceso al proveedor. Se detiene la implementación automática por esa dependencia externa, sin modificar código, pantallas, bloqueos ni pruebas.
+Autenticación: cabecera `Authorization` con esquema Bearer y el secreto compartido. No se acepta secreto en URL ni se usa una sesión del administrador. La comparación es de tiempo constante; el endpoint está excluido de CSRF exclusivamente porque verifica su propia autenticación. Devuelve `401` sin credencial y `503` si está sin configurar. Es privado, no indexable y sin caché.
 
-Para continuar, el titular necesita obtener un acceso permitido ya habilitado o expresamente aprobado y el acuerdo aplicable: en Techmap, verificar la licencia del plan y una muestra de Computrabajo–Salta; en TheirStack, verificar si su prueba ofrece una muestra dentro del presupuesto, sin contratar el plan de USD 49. Una muestra debe incluir ubicación provincial/localidad, URL original de `ar.computrabajo.com` y fechas. No se enviaron solicitudes ni mensajes a los proveedores.
+Usar el payload estándar de Apify, evento `ACTOR.RUN.SUCCEEDED`. Se lee `resource.id`; cualquier URL o dataset declarados en el evento se ignoran. Con GET autenticados a `api.apify.com` se verifica identidad del actor, coincidencia de `actId`, ID de corrida y estado `SUCCEEDED`; de esa respuesta se obtiene `defaultDatasetId`.
 
-Si existe una cuenta autorizada: Techmap muestra la clave en RapidAPI → Endpoints → `X-RapidAPI-Key`; TheirStack en Settings → API Keys. Cualquier clave debe configurarse mediante el campo privado del proveedor o del alojamiento, nunca por chat. No hay una variable ni un adaptador de Computrabajo que se active solo al pegarla; la conexión privada y el nombre de su variable se definirán contra el proveedor elegido antes de usarla. Con acceso y condiciones confirmados, la primera ejecución será mínima en una base aislada, dejando todas las ofertas pendientes y reprocesando el payload guardado sin otra consulta.
+Límites: webhook 32 KiB; metadatos 128 KiB por respuesta; dataset 2 MiB y hasta 50 registros. Se solicita un registro extra para detectar exceso, sin importar parcialmente un dataset de más de 50. No se siguen redirecciones; el token viaja solo en cabecera y los destinos son fijos, con IDs validados. Solo se acepta JSON sin compresión, con tiempo de red de hasta 10 segundos por operación y presupuesto de trabajo de 45 segundos.
 
-## Qué sí hace el código
+Cada corrida tiene registro persistente, contador de intentos y resultado. El lease dura 300 segundos; si otro trabajador está activo se responde `503` para reintento. Oferta, identidad externa y cursor se confirman juntos por registro. Una interrupción conserva el avance; se verifica la huella del dataset antes de continuar para no mezclar contenidos cambiados. Una corrida ya completada responde `already_processed`, `imported: 0`, sin descargar otra vez. Hasta 12 intentos, alineados con los reintentos de Apify; después requiere intervención. Para reproducir tras corregir un fallo se puede usar una nueva corrida propia; no borrar registros de idempotencia para forzar reenvíos.
 
-`salta_emplea/computrabajo.py` es una política **local de aportes manuales**, sin cliente HTTP, adaptador o consulta de vigencia. `source_catalog.py` sigue siendo un catálogo de referencias. El colector existente conserva Jobicy sin cambiar su acceso o comportamiento.
+Resultados: `imported`, `existing`, `changed`, `rejected`, `processed`, y motivos acotados. Se ven en **Administración → Automatización → Registro de tareas**, tarea `apify_computrabajo`, y en `apify_import_runs`. Los fallos conservan códigos propios, sin cuerpos del proveedor, tokens ni descripciones completas. Repetir una corrida interrumpida conserva los contadores acumulados, sin duplicar ofertas. En corridas distintas: 50 con 40 conocidos → 10 importados; todos conocidos → cero.
 
-En `/admin/fuentes` y `/admin/automatizacion` se muestra el bloqueo accionable, última corrida registrada si existe y ausencia de programación de Computrabajo. No se inventa próxima ejecución. El botón específico de recopilación está deshabilitado y no apunta a un endpoint ficticio. El servidor rechaza activaciones incompatibles aunque se manipule el formulario. La referencia se guarda manual/deshabilitada; su pausa persiste en la base entre despliegues.
+## Preparación privada en Vercel (sin activar ahora)
 
-El enlace «Incorporar aviso de Computrabajo» abre `/admin/nueva?source_preset=computrabajo-salta`, con la fuente preparada y sin inventar una URL de aviso. El titular aporta solo información que puede reutilizar y comprueba la localidad real en Salta; el sistema no deduce geografía por encontrar la palabra «salta» en un texto. No existe filtrado geográfico automático de Computrabajo sin un contrato de lectura comprobado. Una vacante remota requiere revisar expresamente residencia y restricciones, sin asumir elegibilidad mundial.
+Variables, documentadas solo por nombre y sin valores:
 
-El aporte conserva un resumen plano de hasta 600 caracteres, requisitos breves de hasta 600 si constan y evidencia textual opcional de hasta 2000. Se rechazan HTML, imágenes y textos que excedan esos límites, sin recortarlos silenciosamente. No se descargan imágenes ni descripciones completas. Los datos no aportados siguen ausentes; se muestran con la política «No informado» del sitio.
+- `APIFY_API_TOKEN`
+- `APIFY_COMPUTRABAJO_ACTOR_ID`
+- `APIFY_WEBHOOK_SECRET`
 
-El enlace debe ser HTTPS, host exacto `ar.computrabajo.com`, puerto estándar y ruta de detalle `/ofertas-de-trabajo/oferta-de-trabajo-…`, sin credenciales, controles o rutas de listado. Esta validación comprueba estructura, no existencia o vigencia remota. Se eliminan fragmento y seguimiento conocido (`utm_`, `fbclid`, `gclid`); los otros parámetros conservan orden y representación, incluso repetidos, vacíos o sin signo igual, para no cambiar identidad sin evidencia. Una postulación alternativa se rechaza: el destino debe coincidir con el original canónico.
+En **Project → Settings → Environment Variables**, configurar primero un entorno de prueba con PostgreSQL propio. El token se obtiene en la sección privada de integraciones/API de Apify; usar permisos mínimos de lectura de actor, corridas y datasets que admita la cuenta. El identificador puede ser el nombre del actor indicado arriba o su ID interno confirmado. El secreto del webhook debe ser aleatorio, de al menos 32 caracteres, distinto de los demás secretos. No pegarlos en GitHub, chats, URLs o capturas.
 
-No se abre ninguna de esas URLs desde el servidor. Una ficha aprobada muestra la fuente y «Ver oferta y postularme», con `target="_blank"` y `rel="noopener noreferrer"`. Computrabajo puede exigir su propio registro. Salta Emplea no recibe CV ni gestiona la postulación.
+Hay una migración **2**, aditiva, para `external_jobs` y `apify_import_runs`. Conserva las ofertas y la auditoría existentes; no carga datos de prueba. El build actual de Vercel ejecuta migraciones: antes de autorizar un futuro despliegue, preparar backup protegido de PostgreSQL y verificar restauración aislada. Para aplicarla en un entorno aislado configurado: `python -m salta_emplea.cli init`. Windows/VS Code: `.venv\Scripts\python.exe -m salta_emplea.cli init`.
 
-## Contrato interno y garantías reutilizadas
+Esta rama mantiene los despliegues Git deshabilitados; no se modificaron cron ni configuración privada. Un futuro despliegue/merge necesita autorización aparte. Para rollback de código, conservar una versión que acepte el esquema 2: el código anterior con migrador de versión 1 lo rechaza. No borrar tablas ni restaurar producción para ensayar recuperación.
 
-Se usan `jobs`, `provenance`, `audit` y `sources`; no hay segunda base ni migraciones nuevas.
+## Task y webhook en Apify (dejar deshabilitados)
 
-| Dato | Campo/decisión existente |
-|---|---|
-| Fuente y evidencia | `source_name`, `source_url`, `original_text`, `provenance.payload` |
-| Identidad estable | `source_canonical_url` único en SQLite y PostgreSQL; ID externo pendiente de contrato real |
-| Cargo, empresa y localidad | `title`, `company`, `location`; sin inventar faltantes |
-| Fecha original | `original_date` solo aportada por la fuente; no se deduce de incorporación |
-| Resumen permitido | `description` breve; no descripción completa copiada |
-| Detección | `collected_at`, generada por el circuito existente |
-| Última revisión | `last_checked_at`; distinguir revisión editorial de una consulta remota no realizada |
-| Estado | `pending` al crear; aprobación exclusiva del titular por el panel |
+1. Abrir el actor indicado y guardar una **Task** propia. País **Argentina** (`country: ar`), URL inicial **https://ar.computrabajo.com/empleos-en-salta**, máximo **50**, detalles completos activados y evitar republicados activado. El README documenta `startUrls`, `maxItems` y `skipReposts`; revisar el formulario de la versión concreta para la opción de detalles, cuyo nombre JSON no está confirmado aquí. No usar el ejemplo por defecto de México ni limitar por una palabra de puesto. No agregar un filtro de últimas 24 horas: podría omitir oportunidades de la primera carga.
+2. En la Task, crear integración **Webhook / HTTP request**, solo evento **Actor run succeeded**. Destino: la URL HTTPS del entorno autorizado más `/api/webhooks/apify/computrabajo`. Conservar el payload estándar con `eventType` y `resource`.
+3. En **Headers template**, configurar `Authorization` con `Bearer` seguido del mismo secreto guardado privadamente como `APIFY_WEBHOOK_SECRET`. Pegar el secreto únicamente en ese campo privado; Apify no interpreta un nombre de variable como su valor. No poner token de API ni secreto en la URL.
+4. Crear un **Schedule** diario asociado a la Task. Ejemplo: 09:00 en `America/Argentina/Salta` (12:00 UTC si la UI usa UTC); comprobar la zona y el horario que la consola muestra como próxima ejecución. Mantenerlo **deshabilitado** durante esta entrega. Guardar una Task o credenciales no prueba que exista una programación activa.
+5. En una futura prueba autorizada, usar la misma versión/input que produjo la muestra del titular y un máximo pequeño. Enviar la notificación de una corrida propia terminada al entorno aislado. El botón genérico **Test** puede no contener un ID de corrida real y debe fallar en ese caso. Un Preview protegido por login puede rechazar Apify antes de Flask: resolver ese acceso en el entorno de pruebas mediante configuración oficial, sin desproteger producción.
+6. Comprobar registro de tarea, cantidad, procedencia y estado pendiente. Reenviar el mismo evento: debe responder cero, sin otra descarga. Revisar y aprobar manualmente una única oferta apta, comprobar CTA y destino original. No aprobar avisos sintéticos en producción. Solo entonces considerar habilitar el Schedule, tras autorización de despliegue y gasto.
 
-`domain.create_job` conserva procedencia, bloqueo editorial compartido y unicidad por URL. Repetir una versión no duplica el aviso ni sustituye correcciones; un cambio material recibido por actor interno retira la aprobación sin reemplazar silenciosamente la versión preparada. Un aporte público no puede retirar una publicación legítima. Reincorporar un archivado no lo reabre. La aprobación también valida enlaces de filas anteriores a esta política.
+Evitar republicados reduce repeticiones del actor; la deduplicación de Salta Emplea sigue siendo obligatoria. El límite del importador es por corrida, no un presupuesto mensual ni un bloqueo de ejecuciones manuales adicionales.
 
-Una ausencia en un listado, un bloqueo o un fallo no se transforman en cierre. Este cambio no implementa un comprobador remoto de Computrabajo; conserva el vencimiento explícito y la política editorial de antigüedad existentes.
+## Costos y documentación primaria
 
-## Pruebas y alcance
+No se activó consumo. El [Store del actor](https://apify.com/unfenced-group/computrabajo-com-job-scraper) muestra «desde USD 1,19/1000 resultados», mientras su README publica USD 1,49/1000. Hay una discrepancia: confirmar la tarifa de la cuenta en Apify antes de programar. Para 50 resultados × 30 días, el componente por resultados sería aproximadamente USD 1,79–2,24; **no es el costo total** ni una cotización. No se verificaron plan, créditos, cómputo, almacenamiento, transferencia, impuestos o excedentes de la cuenta. La facturación puede incluir resultados repetidos que Salta Emplea no cree como ofertas nuevas. No se contrató ningún plan ni se garantiza un tope absoluto de USD 30.
 
-Las fixtures son **aportes manuales sintéticos PRUEBA**, con URLs ficticias bajo la estructura del portal. No son respuestas de API ni evidencia de cobertura o permiso. Se prueban dos incorporaciones del mismo aporte, aprobación obligatoria, procedencia, conservación de correcciones, cambio material, no reapertura, aporte público falso, límites y enlaces maliciosos. El colector no consulta Computrabajo aunque existan booleanos locales activos.
+Referencias: [webhooks, cabeceras y reintentos](https://docs.apify.com/integrations/webhooks/actions), [consulta de corrida](https://docs.apify.com/api/v2/actor-run-get), [descarga de dataset](https://docs.apify.com/api/v2/dataset-items-get).
 
-Los casos PostgreSQL usan el servicio aislado de CI y un esquema aleatorio eliminado al terminar; incluyen incorporación concurrente y conservación de corrección editorial. No usan Neon ni secretos de producción. Los tests de HTTP/panel comprueban autenticación, CSRF, botón deshabilitado, referencia persistente y CTA original.
+## Validación reproducible y pendiente real
 
-El circuito Chromium crea una base temporal, usa datos PRUEBA y revisa fuente, edición, aprobación y ficha a 390 y 1440 px. Bloquea toda solicitud fuera del servidor local: no abre el enlace externo ni demuestra acceso a Computrabajo. Solo exporta capturas públicas de la ficha de prueba; no conserva sesión ni capturas del panel. La regresión existente puede consultar la web pública en lectura, sin presentar esta rama como desplegada.
+`python -m pytest -q` ejecuta los casos de contrato: cinco pendientes, reimportación cero, 50/40/10, CTA original, rechazo de dominio candidato, fecha inconsistente ignorada, HTML eliminado, cambios y correcciones conservadas, autenticación, reintentos, ausencias, límites y recuperación. Los casos PostgreSQL necesitan `POSTGRES_TEST_URL` hacia una base aislada; CI crea su propio servicio, sin Neon.
 
-Comandos desde la raíz del checkout, también en PowerShell con `.venv\Scripts\python.exe` en lugar de `.venv/bin/python`:
+`python scripts/browser_check.py` prueba HTTP local → SQL → panel → aprobación → ficha en Chromium móvil/escritorio. El transporte Apify está sustituido y las entradas son sintéticas. Solo se exportan capturas de fichas públicas con datos PRUEBA. Ninguno de estos casos demuestra recepción real de Apify.
 
-```text
-.venv/bin/python -m pytest -q tests/test_computrabajo.py tests/test_computrabajo_editorial.py tests/test_computrabajo_ui.py
-.venv/bin/python -m pytest -q tests/test_postgres.py
-.venv/bin/python scripts/browser_check.py
-```
-
-PostgreSQL requiere `POSTGRES_TEST_URL` hacia una base aislada; no usar la de producción. Browser requiere `requirements-browser.txt` y Chromium instalado por Playwright. Las pruebas específicas de timeout, 429, bloqueo, paginación, cursor y cierre remoto quedan pendientes hasta existir un adaptador sobre acceso real; no se simula su cumplimiento con el flujo manual.
-
-## Requisito mínimo para continuar y programación
-
-1. Aportar un mecanismo de lectura permitido para este proyecto: API/feed oficial o acuerdo aplicable con un proveedor. Comprobar que autoriza almacenar y mostrar resumen, datos y enlace original, sin asumir que la venta de acceso otorga derechos ajenos.
-2. Configurar las credenciales directamente en el proveedor y el campo privado del alojamiento, con alcance mínimo. No hay variables de Computrabajo añadidas ni una clave cuya sola presencia active un adaptador inexistente. Las variables necesarias se definirán únicamente contra el método elegido.
-3. Verificar una muestra pequeña autorizada con ubicación estructurada Salta, ID/URL original, fechas, paginación, límites y señales de cierre. Guardar su payload de forma privada y reprocesarlo sin nuevas consultas para probar idempotencia.
-4. Implementar el adaptador en el colector existente, con límites de tamaño/tiempo/páginas, reservas persistentes, tratamiento de `Retry-After`, pausa ante bloqueo y comprobaciones PostgreSQL. Solo entonces revisar y autorizar activación.
-
-La configuración del repositorio conserva su cron diario existente; no se añadió un horario de Computrabajo ni se cambió ningún plan. El conector de lectura de cuenta no expuso el plan de facturación vigente: no se afirma que una frecuencia nueva esté autorizada por él. Antes de elegirla, contrastar cuotas del acceso real y [límites actuales de Vercel Cron](https://vercel.com/docs/cron-jobs/usage-and-pricing). Una alternativa frecuente en otro servicio exigiría presupuesto y aprobación concretos; no se contrató ninguna.
-
-Para mantener esta entrega como PR sin despliegue, `vercel.json` deshabilita despliegues Git únicamente para `codex/computrabajo-acceso-y-revision`, según la [configuración oficial](https://vercel.com/docs/project-configuration/git-configuration). No cambia `main`, otros entornos ni los cron de producción. No fusionar ni desplegar esta PR como parte de esta tarea.
+Pendiente: incorporar el JSON real saneado y verificar el circuito Apify → webhook → dataset → PostgreSQL aislado con una corrida autorizada; revisar costos de la cuenta y configuración real del Schedule. No se declara la automatización terminada hasta completar esa prueba.
