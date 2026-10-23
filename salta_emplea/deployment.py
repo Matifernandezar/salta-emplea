@@ -8,13 +8,13 @@ from dataclasses import dataclass
 import re
 from urllib.parse import urlsplit
 
-from . import mailer
+from . import db, mailer
 
 
 _TABLES = frozenset({
     'schema_migrations', 'jobs', 'provenance', 'sources', 'reports',
     'subscribers', 'outbox', 'deliveries', 'ads', 'settings', 'audit',
-    'rate_limits', 'task_runs', 'uploads', 'task_locks',
+    'rate_limits', 'task_runs', 'uploads', 'task_locks', 'external_jobs', 'apify_import_runs',
 })
 
 
@@ -116,7 +116,7 @@ def _database_checks(target):
                         'Faltan tablas del esquema; aplicar la migración con el comando init por separado.')]
                 cursor.execute('SELECT version FROM schema_migrations ORDER BY version')
                 versions = [row[0] for row in cursor.fetchall()]
-                if versions != [1]:
+                if versions != list(range(1, db.SCHEMA_VERSION + 1)):
                     return results + [Check('DATABASE_SCHEMA', 'ERROR',
                         'La versión del esquema no coincide con esta aplicación; revisar las migraciones.')]
             return results + [Check('DATABASE_SCHEMA', 'OK', 'Tablas y versión del esquema comprobadas.')]

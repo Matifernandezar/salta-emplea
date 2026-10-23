@@ -26,7 +26,9 @@ La carpeta `vista-previa/` conserva la publicación estática anterior, pero ya 
 
 ## Fuentes elegidas y lectura de imágenes
 
-Instagram **@empleosalta12**, Computrabajo y LinkedIn figuran como referencias preparadas en Fuentes, con acceso automático pendiente. Registrarlas no conecta sus publicaciones ni concede permiso de reutilización. Ver [estado y condiciones](docs/FUENTES-ELEGIDAS.md).
+Instagram **@empleosalta12** y LinkedIn figuran como referencias preparadas en Fuentes, con acceso automático pendiente. Computrabajo incorpora recepción de datasets terminados de Apify, todavía sin activar en producción. Registrarlas no conecta sus publicaciones ni concede permiso de reutilización. Ver [estado y condiciones](docs/FUENTES-ELEGIDAS.md).
+
+Computrabajo: el [importador Apify y su guía](docs/COMPUTRABAJO.md) verifican corrida/actor, limitan a 50 registros y conservan aprobación obligatoria. No se ejecuta el actor desde Vercel. La fixture actual es sintética: faltan el JSON real saneado y la verificación con una corrida propia antes de declarar la integración operativa.
 
 Al incorporar texto pegado se preparan campos con etiquetas explícitas, sin proveedor externo ni publicación. Las imágenes iguales se reconocen por la huella de una copia saneada; quedan privadas para revisión. El módulo opcional de lectura usa Google Cloud Vision únicamente con configuración completa, consentimiento para esa imagen y cupo disponible. Conserva texto y evidencia, completa campos vacíos y nunca aprueba ni reemplaza correcciones concurrentes. Sueldos y fechas requieren revisión manual.
 

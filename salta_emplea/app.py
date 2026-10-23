@@ -18,7 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
+from . import apify_computrabajo, computrabajo, db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
 from .config import load_env
 
 
@@ -34,6 +34,9 @@ def create_app(config=None):
         DATABASE_URL=os.environ.get('DATABASE_URL', ''),
         SERVERLESS=os.environ.get('VERCEL') == '1',
         CRON_SECRET=os.environ.get('CRON_SECRET', ''),
+        APIFY_API_TOKEN=os.environ.get('APIFY_API_TOKEN', ''),
+        APIFY_COMPUTRABAJO_ACTOR_ID=os.environ.get('APIFY_COMPUTRABAJO_ACTOR_ID', ''),
+        APIFY_WEBHOOK_SECRET=os.environ.get('APIFY_WEBHOOK_SECRET', ''),
         UPLOAD_DIR=os.environ.get('UPLOAD_DIR', str(Path(app.instance_path) / 'uploads')),
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', ''),
         PUBLIC_RESPONSIBLE_NAME=os.environ.get('PUBLIC_RESPONSIBLE_NAME', ''),
@@ -98,6 +101,7 @@ def create_app(config=None):
         return g.db
 
     app.register_blueprint(mail_webhooks.create_blueprint(connection))
+    app.register_blueprint(apify_computrabajo.create_blueprint(connection))
 
     @app.teardown_appcontext
     def close_db(_error=None):
@@ -153,7 +157,7 @@ def create_app(config=None):
     def protect():
         # La firma del proveedor reemplaza CSRF exclusivamente en este endpoint.
         # El blueprint la verifica antes de abrir la base o procesar datos.
-        if request.endpoint == 'mail_webhooks.resend':
+        if request.endpoint in {'mail_webhooks.resend', 'apify_webhooks.receive'}:
             return
         if request.method == 'POST':
             supplied = request.form.get('csrf_token', '')
@@ -172,7 +176,7 @@ def create_app(config=None):
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         if production:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'
-        if request.path.startswith(('/admin', '/alertas/', '/api/cron/')):
+        if request.path.startswith(('/admin', '/alertas/', '/api/cron/', '/api/webhooks/')):
             response.headers['Cache-Control'] = 'no-store'
             response.headers['Referrer-Policy'] = 'no-referrer'
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
@@ -202,6 +206,21 @@ def create_app(config=None):
                 except ValueError:
                     result[key] = []
         return result
+
+    def source_registry():
+        records = [dict(row) for row in connection().execute('SELECT * FROM sources ORDER BY name,id')]
+        for source in records:
+            source['is_computrabajo'] = computrabajo.is_computrabajo_offer({
+                'source_url': source['url'], 'source_name': source['name'],
+            })
+        reference = next((source for source in records if source['is_computrabajo']), None)
+        state = computrabajo.access_state(reference)
+        if all(app.config.get(key) for key in ('APIFY_API_TOKEN', 'APIFY_COMPUTRABAJO_ACTOR_ID', 'APIFY_WEBHOOK_SECRET')):
+            last = connection().execute('SELECT started_at,finished_at,status FROM apify_import_runs ORDER BY started_at DESC LIMIT 1').fetchone()
+            state.update(label='Apify: variables presentes', apify_configured=True,
+                         reason='La presencia de variables no verifica credenciales ni programación. Apify ejecuta la búsqueda; el webhook recibe el resultado. Revisá la tarea apify_computrabajo en el registro de corridas.',
+                         last_run_at=(last['finished_at'] or last['started_at']) if last else None)
+        return records, state
 
     def settings_dict():
         # El registro de webhooks y supresiones comparte la tabla: las páginas
@@ -271,11 +290,21 @@ def create_app(config=None):
         job = domain.public_job(connection(), job_id)
         if not job:
             abort(404)
+        computrabajo_offer = computrabajo.is_computrabajo_offer(job)
+        if computrabajo_offer:
+            try:
+                original = computrabajo.valid_original_url(job['source_url'])
+            except ValueError:
+                original = None
+            # Una fila antigua no puede ofrecer un destino alternativo inseguro.
+            # Solo se adapta la presentación; no modifica datos al consultar.
+            job['source_url'] = job['application_url'] = original
         job['share_url'] = public_metadata.public_url(app.config, url_for('job_detail', job_id=job_id)) or url_for('job_detail', job_id=job_id)
         job['share_text'] = f"{job['title']} · {job.get('company') or 'Empresa no informada'} · {job.get('location') or 'Localidad no informada'}. {job['share_url']}"
         job['whatsapp_url'] = 'https://wa.me/?' + urlencode({'text': job['share_text']})
         ch = {c['key']: c['enabled'] for c in channels()}
         return render_template('job.html', job=job, channels=ch, share_url=job['share_url'], share_text=job['share_text'],
+                               computrabajo_offer=computrabajo_offer,
                                page_meta=public_metadata.page_metadata(app.config, 'job_detail', job=job))
 
     @app.post('/ofertas/<int:job_id>/reportar')
@@ -318,6 +347,9 @@ def create_app(config=None):
 
     def job_form(existing=None):
         data = request.form.to_dict()
+        declared = dict(existing or {}) | data
+        if computrabajo.is_computrabajo_offer(declared) and request.files.get('image') and request.files['image'].filename:
+            raise ValueError('Computrabajo admite un enlace y un resumen breve; no se almacenan imágenes de esta fuente.')
         if 'uncertain_fields' in data:
             data['uncertain_fields'] = [x.strip() for x in data['uncertain_fields'].split(',') if x.strip()]
         # Estado, fechas de recopilación y aprobador nunca se toman del formulario.
@@ -437,7 +469,7 @@ def create_app(config=None):
     def admin_automation():
         from . import mailer
         conn = connection()
-        sources = [dict(row) for row in conn.execute('SELECT * FROM sources ORDER BY name,id')]
+        sources, computrabajo_state = source_registry()
         for source in sources:
             source['result_summary'] = automation_result(source['last_result'])
             source['collectible'] = bool(source['status'] == 'active' and source['authorized']
@@ -449,6 +481,7 @@ def create_app(config=None):
         cron_last = conn.execute("SELECT created_at FROM audit WHERE actor='programador' AND action='cron_recibido' ORDER BY id DESC LIMIT 1").fetchone()
         mail_state = mail_configuration_state()
         return render_template('automation.html', sources=sources, task_runs=runs,
+            computrabajo_state=computrabajo_state,
             database_type='PostgreSQL' if db.is_postgres(app.config['DATABASE_TARGET']) else 'SQLite',
             mail_key_present=bool(app.config['RESEND_API_KEY']),
             mail_sender_present=bool(app.config['MAIL_FROM']),
@@ -509,6 +542,9 @@ def create_app(config=None):
     @app.route('/admin/nueva', methods=['GET', 'POST'])
     @admin_required
     def admin_new():
+        preset_key = request.args.get('source_preset', '')
+        if preset_key and preset_key != 'computrabajo-salta':
+            abort(400, 'Referencia de incorporación desconocida.')
         if request.method == 'POST':
             try:
                 data = job_form()
@@ -517,7 +553,11 @@ def create_app(config=None):
                 return redirect(url_for('admin_edit', job_id=job_id))
             except ValueError as exc:
                 flash(str(exc), 'error')
-        return render_template('edit.html', job=dict(request.form), duplicates=[], provenance=[],
+        job_data = dict(request.form)
+        if request.method == 'GET' and preset_key:
+            job_data['source_name'] = 'Computrabajo'
+        return render_template('edit.html', job=job_data, duplicates=[], provenance=[],
+                               computrabajo_offer=bool(preset_key) or computrabajo.is_computrabajo_offer(job_data),
                                image_status=image_pipeline.status(connection(), app.config), image_result=None)
 
     @app.route('/admin/ofertas/<int:job_id>', methods=['GET', 'POST'])
@@ -545,6 +585,7 @@ def create_app(config=None):
         duplicates = [row_dict(r) for r in connection().execute('SELECT * FROM jobs WHERE id<>? AND lower(title)=lower(?) LIMIT 10', (job_id, job['title']))]
         image_result = image_pipeline.result_for(connection(), job_id, job.get('image_path'))
         return render_template('edit.html', job=job, duplicates=duplicates, provenance=provenance,
+                               computrabajo_offer=computrabajo.is_computrabajo_offer(job),
                                image_status=image_pipeline.status(connection(), app.config),
                                image_result=image_result,
                                image_error_message=str(extraction.ExtractionError(image_result.get('error_code'))) if image_result and image_result['status'] == 'failed' else '',
@@ -650,6 +691,11 @@ def create_app(config=None):
                 authorized = int(bool(data.get('authorized')))
                 status = 'active' if authorized and data.get('enabled') else 'disabled'
                 name = data.get('name', '').strip()[:200]
+                is_computrabajo = computrabajo.is_computrabajo_offer({'source_url': url, 'source_name': name})
+                if is_computrabajo and (method != 'manual' or data.get('enabled')):
+                    raise ValueError('Computrabajo no tiene un acceso automático verificado. Conservá la referencia manual deshabilitada.')
+                if is_computrabajo:
+                    status = 'disabled'
                 terms = external_url(data.get('terms_url', '')) if data.get('terms_url') else None
                 if not name or (method != 'manual' and not terms):
                     raise ValueError('Indicá nombre y condiciones de uso revisadas.')
@@ -663,7 +709,8 @@ def create_app(config=None):
                 flash('Fuente guardada. La tarea CLI registra cada resultado.', 'success')
             except (ValueError, TypeError) as exc:
                 flash(str(exc), 'error')
-        return render_template('sources.html', sources=[dict(r) for r in connection().execute('SELECT * FROM sources')],
+        sources, computrabajo_state = source_registry()
+        return render_template('sources.html', sources=sources, computrabajo_state=computrabajo_state,
                                source_presets=source_catalog.source_presets())
 
     @app.post('/admin/fuentes/preparadas/<key>')

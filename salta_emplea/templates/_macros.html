@@ -53,7 +53,7 @@
 </nav>
 {%- endmacro %}
 
-{% macro offer_fields(data, admin=false) -%}
+{% macro offer_fields(data, admin=false, computrabajo=false) -%}
   <fieldset>
 <legend>Datos del empleo</legend>
 <p class="form-help">Transcribí solo lo que dice el aviso. Si falta un dato, dejá el campo vacío.</p>
@@ -73,9 +73,9 @@
 </label>
       <label class="field">Tipo de contratación<input name="contract_type" value="{{ data.contract_type|default('', true) }}" maxlength="120">
 </label>
-      <label class="field span-2">Descripción<textarea name="description" rows="6" maxlength="15000">{{ data.description|default('', true) }}</textarea>
+      <label class="field span-2">{{ 'Resumen breve' if computrabajo else 'Descripción' }}<textarea name="description" rows="6" maxlength="{{ 600 if computrabajo else 15000 }}">{{ data.description|default('', true) }}</textarea>
 </label>
-      <label class="field span-2">Requisitos<textarea name="requirements" rows="4" maxlength="10000">{{ data.requirements|default('', true) }}</textarea>
+      <label class="field span-2">Requisitos<textarea name="requirements" rows="4" maxlength="{{ 600 if computrabajo else 10000 }}">{{ data.requirements|default('', true) }}</textarea>
 </label>
       <label class="field span-2">Enlace o contacto para postularse<input name="application_url" value="{{ data.application_url|default('', true) }}" maxlength="2000" placeholder="https://…, mailto:… o https://wa.me/…">
 <span class="field-help">Solo el enlace, correo o WhatsApp que figure en el aviso original.</span>
@@ -109,8 +109,8 @@
 </label>
 <label class="field">Enlace a la publicación original<input type="url" name="source_url" value="{{ data.source_url|default('', true) }}" maxlength="2000" placeholder="https://…">
 </label>
-<label class="field span-2">Texto original<textarea name="original_text" rows="7" maxlength="30000">{{ data.original_text|default('', true) }}</textarea>
-<span class="field-help">Pegá el aviso que tengas permiso de compartir. Al incorporarlo, se preparan datos con etiquetas explícitas como “Puesto:” o “Correo:”; los datos dudosos quedan para revisión.</span>
+<label class="field span-2">{{ 'Referencia breve del original' if computrabajo else 'Texto original' }}<textarea name="original_text" rows="7" maxlength="{{ 2000 if computrabajo else 30000 }}">{{ data.original_text|default('', true) }}</textarea>
+<span class="field-help">{% if computrabajo %}Conservá solo evidencia breve que puedas reutilizar, sin imágenes ni descripciones completas. Revisá el lugar de trabajo en Salta y no inventes datos ausentes.{% else %}Pegá el aviso que tengas permiso de compartir. Al incorporarlo, se preparan datos con etiquetas explícitas como “Puesto:” o “Correo:”; los datos dudosos quedan para revisión.{% endif %}</span>
 </label>{% if not admin %}<label class="field span-2">Imagen del aviso <span class="muted">(opcional)</span>
 <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
 <span class="field-help">PNG, JPEG o WebP. La imagen se revisa antes de publicar. No adjuntes CV ni documentos personales.</span>

@@ -32,12 +32,12 @@ _PRESETS = tuple(MappingProxyType(item) for item in (
         'url': 'https://ar.computrabajo.com/trabajo-en-salta',
         'method': 'manual',
         'status': 'disabled',
-        'status_label': 'Manual · autorización pendiente',
+        'status_label': 'Sin configurar · acceso automático pendiente',
         'access_explanation': (
-            'Podés guardar el enlace original y preparar el aviso para revisión. '
-            'No hay una API de búsqueda ni permiso de recopilación y '
-            'redistribución verificados para este proyecto. La incorporación '
-            'manual no concede permiso para copiar texto o imágenes.'
+            'No hay acceso de lectura ni permiso de redistribución verificados '
+            'para automatizar Computrabajo. Podés incorporar manualmente un '
+            'resumen breve con permiso y el enlace original para revisión. '
+            'Registrar esta referencia no conecta una búsqueda automática.'
         ),
         'terms_url': 'https://ar.computrabajo.com/avisolegal/',
         'automation_ready': False,

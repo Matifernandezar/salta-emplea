@@ -1,23 +1,26 @@
 {% extends 'base.html' %}
 {% from '_macros.html' import admin_nav, status_badge %}
-{% macro source_fields(source) %}<div class="form-grid">
+{% macro source_fields(source) %}{% set is_computrabajo = source.is_computrabajo|default(false) or source.name == 'Computrabajo' or source.url == 'https://ar.computrabajo.com/trabajo-en-salta' %}<div class="form-grid">
 <label class="field">Nombre <span class="required">*</span>
 <input name="name" value="{{ source.name|default('', true) }}" maxlength="180" required>
 </label>
 <label class="field">URL de la fuente <span class="required">*</span>
 <input name="url" type="url" value="{{ source.url|default('', true) }}" maxlength="2000" required placeholder="https://…">
 </label>
-<label class="field">Método de acceso<select name="method">
-<option value="manual"{% if source.method == 'manual' %} selected{% endif %}>Manual: enlace, texto o imagen</option>
-<option value="jobicy"{% if source.method == 'jobicy' %} selected{% endif %}>API pública Jobicy</option>
+<label class="field">Método de acceso<select name="method"{% if is_computrabajo %} disabled{% endif %}>
+<option value="manual"{% if is_computrabajo or source.method == 'manual' %} selected{% endif %}>{% if is_computrabajo %}Manual: enlace y resumen breve{% else %}Manual: enlace, texto o imagen{% endif %}</option>
+<option value="jobicy"{% if not is_computrabajo and source.method == 'jobicy' %} selected{% endif %}>API pública Jobicy</option>
 </select>
 </label>
-<label class="field">Frecuencia en horas<input name="frequency_hours" type="number" min="6" max="8760" value="{{ source.frequency_hours|default(24, true) }}" required>
+{% if is_computrabajo %}<input type="hidden" name="method" value="manual">{% endif %}
+<label class="field">Frecuencia en horas<input name="frequency_hours" type="number" min="6" max="8760" value="{{ source.frequency_hours|default(24, true) }}" required{% if is_computrabajo %} disabled{% endif %}>
 </label>
+{% if is_computrabajo %}<input type="hidden" name="frequency_hours" value="24">{% endif %}
 <label class="field span-2">Condiciones de uso o evidencia de autorización<input name="terms_url" type="url" value="{{ source.terms_url|default('', true) }}" maxlength="2000" placeholder="https://…">
 </label>
 </div>
-<label class="check-field">
+{% if is_computrabajo %}<p class="form-help" id="computrabajo-reference-{{ source.id|default('new') }}">Referencia manual deshabilitada. Registrar esta fuente no autoriza una recopilación automática ni la reutilización de sus avisos. Aportá cada aviso con permiso y revisalo antes de publicarlo.</p>
+<label class="check-field"><input type="checkbox" name="enabled" value="1" disabled aria-describedby="computrabajo-reference-{{ source.id|default('new') }}"><span>Recopilación automática no disponible</span></label>{% else %}<label class="check-field">
 <input type="checkbox" name="authorized" value="1"{% if source.authorized %} checked{% endif %}>
 <span>Revisé el acceso técnico y las condiciones de uso, y confirmo que este método está permitido.</span>
 </label>
@@ -25,7 +28,7 @@
 <input type="checkbox" name="enabled" value="1"{% if source.status == 'active' %} checked{% endif %}>
 <span>Habilitar fuente<small>Una fuente manual no se recopila automáticamente. Una fuente automática requiere el programador del servidor.</small>
 </span>
-</label>{% endmacro %}
+</label>{% endif %}{% endmacro %}
 {% block title %}Fuentes de ofertas{% endblock %}
 {% block content %}<div class="container admin-container section-space">
 <div class="page-heading">
@@ -34,6 +37,20 @@
 <h1>Fuentes de ofertas</h1>
 </div>
 </div>{{ admin_nav('sources') }}<div class="notice">Integrá únicamente mecanismos permitidos. No se sortean inicios de sesión, restricciones ni bloqueos. La recopilación deja cada aviso pendiente de revisión.</div>
+{% set ct = computrabajo_state|default({}) %}
+<section class="paper admin-section" aria-labelledby="computrabajo-heading">
+<h2 id="computrabajo-heading">Computrabajo</h2>
+<p><strong>Estado: {{ ct.label|default('Sin configurar', true) }}</strong></p>
+<p id="computrabajo-blocked">{{ ct.reason|default('No hay un acceso de lectura autorizado comprobado. Para habilitar una integración hace falta un mecanismo documentado y permiso de reutilización. Mientras tanto, incorporá avisos manualmente con permiso.', true) }}</p>
+<dl class="metadata-list">
+<div><dt>Acceso revisado</dt><dd>{{ ct.research_date|default('2026-10-22', true) }}. Esta revisión no acredita una conexión operativa.</dd></div>
+<div><dt>Última corrida de Computrabajo</dt><dd>{% if ct.last_run_at %}{{ ct.last_run_at|value }}. Consultá su resultado en el registro de corridas.{% else %}Sin corrida registrada. No se comprobó una consulta automática.{% endif %}</dd></div>
+<div><dt>Próxima corrida de Computrabajo</dt><dd>{% if ct.next_run_at %}{{ ct.next_run_at|value }}{% elif ct.apify_configured %}Programación externa en Apify; no comprobada desde este panel.{% else %}Sin programación: la recopilación automática está deshabilitada.{% endif %}</dd></div>
+</dl>
+<button class="button button-outline" type="button" disabled aria-describedby="computrabajo-blocked">Recopilar Computrabajo</button>
+<p><a class="text-link" href="{{ url_for('admin_new', source_preset='computrabajo-salta') }}">Incorporar aviso de Computrabajo →</a></p>
+<p class="small">El aporte manual queda pendiente. Publicá solo datos que tengas permiso de compartir, con un resumen breve de hasta 600 caracteres y el enlace al aviso original.</p>
+</section>
 {% if source_presets %}<section class="admin-section">
 <h2>Fuentes que elegiste</h2>
 <p>Estas referencias permiten conservar la procedencia de avisos aportados por enlace, texto o imagen. Registrarlas no conecta sus publicaciones ni habilita una búsqueda automática.</p>
@@ -72,7 +89,7 @@
 <section class="admin-section">
 <h2>Registro de fuentes</h2>{% for source in sources %}<details class="admin-details source-detail">
 <summary>
-<span>{{ source.name }}</span>{{ status_badge(source.status|default('pending')) }}</summary>
+<span>{{ source.name }}</span>{{ status_badge('disabled' if source.is_computrabajo|default(false) or source.name == 'Computrabajo' or source.url == 'https://ar.computrabajo.com/trabajo-en-salta' else source.status|default('pending')) }}</summary>
 <div class="details-body">
 <dl class="metadata-list">
 <div>

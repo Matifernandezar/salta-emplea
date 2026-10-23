@@ -1,5 +1,6 @@
 """QA Chromium aislado con datos PRUEBA; la comprobación pública es solo lectura."""
 import argparse
+import json
 from contextlib import contextmanager
 from io import BytesIO
 import logging
@@ -20,7 +21,7 @@ from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
-from salta_emplea import db, extraction
+from salta_emplea import apify_computrabajo, db, domain, extraction
 from salta_emplea.app import create_app
 
 PASSWORD = 'PRUEBA-contraseña-ficticia-solo-navegador'
@@ -380,6 +381,163 @@ def run_image_circuit(browser, viewport):
             context.close()
 
 
+def run_computrabajo_circuit(browser, viewport):
+    """Aporte CT PRUEBA local; comprueba el enlace sin visitar Computrabajo."""
+    title = 'PRUEBA — Aviso manual de Computrabajo'
+    original = ('https://ar.computrabajo.com/ofertas-de-trabajo/'
+                'oferta-de-trabajo-de-prueba-editorial')
+    with isolated_server() as (app, origin):
+        connection = db.connect(app.config['DATABASE_TARGET'])
+        try:
+            job_id, _ = domain.create_job(connection, {
+                'title': title, 'company': 'PRUEBA Empresa ficticia',
+                'location': 'Salta Capital', 'modality': 'presencial',
+                'description': 'PRUEBA: resumen breve ficticio con permiso para QA.',
+                'requirements': 'PRUEBA: requisito ficticio.',
+                'source_name': 'Computrabajo',
+                'source_url': original + '?utm_source=PRUEBA#referencia',
+                'application_url': original,
+                'original_text': 'PRUEBA: referencia manual ficticia. No postularse.',
+            }, actor='administrador')
+        finally:
+            connection.close()
+        settings = {'viewport': viewport, 'is_mobile': viewport['width'] < 600,
+                    'has_touch': viewport['width'] < 600, 'service_workers': 'block'}
+        context = browser.new_context(**settings)
+        public_context = browser.new_context(**settings)
+        unexpected = []
+
+        def local_only(route):
+            if route.request.url.startswith(origin + '/'):
+                route.continue_()
+            else:
+                unexpected.append(urlsplit(route.request.url).hostname)
+                route.abort()
+
+        context.route('**/*', local_only)
+        public_context.route('**/*', local_only)
+        try:
+            public = public_context.new_page()
+            assert public.goto(f'{origin}/ofertas/{job_id}').status == 404
+            assert public.goto(origin + '/admin/fuentes').status == 200
+            expect(public).to_have_url(origin + '/admin/ingresar')
+            page = context.new_page()
+            page.goto(origin + '/admin/ingresar')
+            page.locator('[name="password"]').fill(PASSWORD)
+            page.get_by_role('button', name='Ingresar →', exact=True).click()
+            expect(page).to_have_url(origin + '/admin')
+            for path in ('/admin/fuentes', '/admin/automatizacion'):
+                assert page.goto(origin + path).status == 200
+                section = page.locator('section[aria-labelledby="computrabajo-heading"]')
+                expect(section.get_by_text('Estado: Sin configurar', exact=True)).to_be_visible()
+                expect(section.get_by_role('button', name='Recopilar Computrabajo')).to_be_disabled()
+                expect(section.get_by_text('Sin corrida registrada.', exact=False)).to_be_visible()
+                expect(section.get_by_text('Sin programación:', exact=False)).to_be_visible()
+                manual = section.get_by_role('link', name='Incorporar aviso de Computrabajo')
+                expect(manual).to_have_attribute('href', '/admin/nueva?source_preset=computrabajo-salta')
+                no_horizontal_overflow(page)
+
+            page.goto(origin + '/admin/fuentes')
+            reference = page.locator('form[action="/admin/fuentes/preparadas/computrabajo-salta"]')
+            reference.get_by_role('button', name='Registrar referencia manual').click()
+            sources = rows(app, 'SELECT method,status,authorized FROM sources')
+            assert sources == [{'method': 'manual', 'status': 'disabled', 'authorized': 0}]
+            detail = page.locator('details.source-detail').filter(has_text='Computrabajo')
+            detail.locator('summary').click()
+            expect(detail.locator('[name="enabled"]')).to_be_disabled()
+            expect(detail.locator('[name="enabled"]')).not_to_be_checked()
+            no_horizontal_overflow(page)
+            page.get_by_role('link', name='Incorporar aviso de Computrabajo').click()
+            expect(page.locator('[name="source_name"]')).to_have_value('Computrabajo')
+            expect(page.locator('[name="source_url"]')).to_have_value('')
+            expect(page.locator('[name="application_url"]')).to_have_value('')
+            expect(page.locator('[name="image"]')).to_have_count(0)
+            expect(page.locator('[name="allow_ocr"]')).to_have_count(0)
+            expect(page.get_by_text('Aporte manual de Computrabajo', exact=True)).to_be_visible()
+            assert len(rows(app, 'SELECT id FROM jobs')) == 1
+            no_horizontal_overflow(page)
+
+            page.goto(f'{origin}/admin/ofertas/{job_id}')
+            expect(page.get_by_role('link', name='Abrir fuente original')).to_have_attribute('href', original)
+            expect(page.get_by_text('Aporte manual de Computrabajo', exact=True)).to_be_visible()
+            no_horizontal_overflow(page)
+            acknowledge = page.locator('[name="acknowledge"]')
+            if acknowledge.count():
+                acknowledge.check()
+            page.get_by_role('button', name='Aprobar y publicar').click()
+            assert rows(app, 'SELECT status FROM jobs') == [{'status': 'approved'}]
+            assert public.goto(f'{origin}/ofertas/{job_id}').status == 200
+            apply = public.get_by_role('link', name='Ver oferta y postularme')
+            expect(apply).to_have_attribute('href', original)
+            expect(apply).to_have_attribute('target', '_blank')
+            expect(apply).to_have_attribute('rel', 'noopener noreferrer')
+            expect(apply).to_be_visible()
+            no_horizontal_overflow(public)
+            public.screenshot(path=str(CAPTURES / f'local-computrabajo-ficha-{viewport["width"]}.png'), full_page=True)
+            # El destino externo se comprueba en el DOM; nunca se abre ni se simula.
+            assert not unexpected, f'El caso CT intentó acceder a destinos externos: {unexpected}'
+            assert not rows(app, 'SELECT id FROM task_runs')
+            print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; Computrabajo manual, '
+                  'referencia deshabilitada, revisión privada y enlace original. Sin acceso externo.')
+        finally:
+            public_context.close()
+            context.close()
+
+
+def run_apify_circuit(browser, viewport):
+    """HTTP/SQL/Chromium reales locales; transporte Apify sustituido."""
+    fixture = json.loads((ROOT / 'tests/fixtures/apify_computrabajo_contract.json').read_text())
+    secret = 'PRUEBA-webhook-aislado-no-es-una-clave-real'
+    def provider(path, *_args):
+        if path.startswith('acts/'):
+            return {'data': {'id': 'ActorPRUEBA01', 'username': 'unfenced-group', 'name': 'computrabajo-com-job-scraper'}}
+        if path.startswith('actor-runs/'):
+            return {'data': {'id': 'RunPRUEBA01', 'actId': 'ActorPRUEBA01', 'status': 'SUCCEEDED', 'defaultDatasetId': 'DatasetPRUEBA01'}}
+        assert path == 'datasets/DatasetPRUEBA01/items?format=json&limit=51&clean=false'
+        return fixture
+    with isolated_server() as (app, origin), patch.object(apify_computrabajo, 'fetch_json', provider):
+        app.config.update(APIFY_API_TOKEN='PRUEBA', APIFY_COMPUTRABAJO_ACTOR_ID=apify_computrabajo.ACTOR,
+                          APIFY_WEBHOOK_SECRET=secret)
+        context = browser.new_context(viewport=viewport, service_workers='block')
+        unexpected = []
+        context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/')
+                      else (unexpected.append(urlsplit(route.request.url).hostname), route.abort()))
+        try:
+            endpoint = origin + '/api/webhooks/apify/computrabajo'
+            assert context.request.post(endpoint, data={}).status == 401
+            event = {'eventType': 'ACTOR.RUN.SUCCEEDED', 'resource': {'id': 'RunPRUEBA01'}}
+            response = context.request.post(endpoint, data=event, headers={'Authorization': 'Bearer ' + secret})
+            assert response.status == 200 and response.json()['imported'] == 5
+            repeated = context.request.post(endpoint, data=event, headers={'Authorization': 'Bearer ' + secret})
+            assert repeated.status == 200 and repeated.json()['imported'] == 0
+            imported = rows(app, 'SELECT id,status FROM jobs ORDER BY id')
+            assert len(imported) == 5 and all(item['status'] == 'pending' for item in imported)
+            job_id = imported[0]['id']
+            page = context.new_page()
+            assert page.goto(f'{origin}/ofertas/{job_id}').status == 404
+            page.goto(origin + '/admin/ingresar')
+            page.locator('[name="password"]').fill(PASSWORD)
+            page.get_by_role('button', name='Ingresar →', exact=True).click()
+            expect(page).to_have_url(origin + '/admin')
+            page.goto(f'{origin}/admin/ofertas/{job_id}')
+            if page.locator('[name="acknowledge"]').count():
+                page.locator('[name="acknowledge"]').check()
+            page.get_by_role('button', name='Aprobar y publicar').click()
+            context.clear_cookies()
+            assert page.goto(f'{origin}/ofertas/{job_id}').status == 200
+            apply = page.get_by_role('link', name='Ver oferta y postularme en Computrabajo')
+            expect(apply).to_have_attribute('href', fixture[0]['jobUrl'])
+            expect(apply).to_have_attribute('rel', 'noopener noreferrer')
+            assert 'candidato.ar.computrabajo.com' not in page.content()
+            no_horizontal_overflow(page)
+            page.screenshot(path=str(CAPTURES / f'local-apify-ficha-{viewport["width"]}.png'), full_page=True)
+            assert not unexpected
+            print(f'APROBADO: Chromium {viewport["width"]}×{viewport["height"]}; webhook Apify autenticado, '
+                  'cinco pendientes, reintento sin duplicados y aprobación manual. Apify sustituido; sin acceso real al dataset.')
+        finally:
+            context.close()
+
+
 def check_access_helper(browser, target=None):
     """Archivo local, contraseña PRUEBA; nunca imprime ni captura los resultados."""
     import re
@@ -571,6 +729,8 @@ def main():
             for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
                 run_circuit(browser, viewport)
                 run_image_circuit(browser, viewport)
+                run_computrabajo_circuit(browser, viewport)
+                run_apify_circuit(browser, viewport)
             check_access_helper(browser)
             if args.check_public:
                 mode = check_public(browser)

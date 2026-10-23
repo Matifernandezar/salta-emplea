@@ -10,9 +10,10 @@ import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from contextlib import nullcontext
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from . import db
+from . import computrabajo, db
 from zoneinfo import ZoneInfo
 
 
@@ -119,6 +120,9 @@ def _list(value):
 
 
 def _normalize(data):
+    computrabajo_offer = computrabajo.is_computrabajo_offer(data)
+    if computrabajo_offer:
+        data = computrabajo.normalize_manual_offer(data)
     cleaned = {field: _text(data.get(field), 20000 if field in {"original_text", "description", "requirements"} else 2048) for field in FIELDS}
     if not cleaned["title"]:
         raise ValueError("Indicá el puesto antes de incorporar una oferta.")
@@ -133,7 +137,9 @@ def _normalize(data):
         cleaned["source_url"] = application_url(cleaned["source_url"])
         if cleaned["source_url"].startswith("mailto:"):
             raise ValueError("La URL de la fuente debe usar HTTPS.")
-    cleaned["source_canonical_url"] = canonical_url(cleaned["source_url"])
+    # El validador de esta fuente solo retira seguimiento conocido. No ordenar
+    # parámetros desconocidos: el orden de valores repetidos puede ser identidad.
+    cleaned["source_canonical_url"] = cleaned["source_url"] if computrabajo_offer else canonical_url(cleaned["source_url"])
     for field in ("original_date", "last_checked_at", "expires_at"):
         cleaned[field] = _date(cleaned[field], field)
     salary = [cleaned[field] for field in ("salary_amount", "salary_currency", "salary_period")]
@@ -225,14 +231,24 @@ def job_dict(row):
     return data
 
 
-def create_job(conn, data, actor="comunidad"):
+def create_job(conn, data, actor="comunidad", *, in_transaction=False, existing_job_id=None, force_review=False):
+    # El importador compone oferta, identidad externa y cursor en una transacción.
+    # Los formularios públicos nunca controlan estos argumentos ni el actor.
+    if (existing_job_id is not None or force_review) and actor not in TRUSTED_IMPORT_ACTORS:
+        raise ValueError("La identidad externa exige un recopilador autorizado.")
+    if in_transaction and not conn.in_transaction:
+        raise RuntimeError("La incorporación requiere una transacción activa.")
     cleaned = _normalize(data)
     stamp = now()
-    with conn:
+    with (nullcontext() if in_transaction else conn):
         # Reservar la escritura antes del control evita una carrera entre dos recolectores.
         db.editorial_lock(conn)
-        if cleaned["source_canonical_url"]:
-            existing = conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone()
+        if cleaned["source_canonical_url"] or existing_job_id is not None:
+            existing = (conn.execute("SELECT * FROM jobs WHERE id=?", (existing_job_id,)).fetchone()
+                        if existing_job_id is not None else
+                        conn.execute("SELECT * FROM jobs WHERE source_canonical_url=?", (cleaned["source_canonical_url"],)).fetchone())
+            if existing_job_id is not None and existing is None:
+                raise ValueError("La oferta externa vinculada no existe.")
             if existing:
                 baseline = _import_baseline(conn, existing)
                 _provenance(conn, existing["id"], cleaned)
@@ -240,6 +256,8 @@ def create_job(conn, data, actor="comunidad"):
                 # la fuente anterior evita retirar otra vez por una corrección
                 # editorial que ya fue aprobada explícitamente.
                 changed = [field for field in MATERIAL_FIELDS if cleaned.get(field) != baseline.get(field)]
+                if force_review:
+                    changed.append("source_content_hash")
                 # Las contribuciones públicas jamás pueden retirar una oferta:
                 # podrían contener cambios falsos o reproducir una URL ajena.
                 trusted_actor = actor in TRUSTED_IMPORT_ACTORS
@@ -322,6 +340,10 @@ def transition_job(conn, job_id, action, actor, acknowledge=False):
             raise ValueError("La oferta no existe.")
         stamp = now()
         if action == "approve":
+            if computrabajo.is_computrabajo_offer(dict(job)):
+                # También protege filas anteriores a esta política: aprobar no
+                # permite sustituir el original por un contacto o dominio ajeno.
+                computrabajo.normalize_manual_offer(dict(job))
             if job['title'] == 'Aviso pendiente de transcripción':
                 raise ValueError('Transcribí el puesto real de la fuente antes de aprobar. El título interno no puede publicarse.')
             if not application_url(job["application_url"]):

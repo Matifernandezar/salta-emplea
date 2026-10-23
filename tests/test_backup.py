@@ -310,7 +310,7 @@ def test_postgres_real_custom_dump_restore_integrity_private_image_and_quarantin
             with Image.open(BytesIO(restored_image)) as image:
                 assert image.format == "JPEG" and image.size == (24, 24)
             assert restored.execute("SELECT count(*) FROM provenance WHERE job_id=?", (job_id,)).fetchone()[0] == 1
-            assert restored.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 1
+            assert restored.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 2
             assert restored.execute("SELECT count(*) FROM sources WHERE authorized=0 AND status='paused'").fetchone()[0] == 1
             assert restored.execute("SELECT status FROM subscribers").fetchone()[0] == "unsubscribed"
             assert restored.execute("SELECT status FROM outbox").fetchone()[0] == "cancelled"

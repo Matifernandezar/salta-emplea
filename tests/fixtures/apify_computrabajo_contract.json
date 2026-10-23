@@ -1,0 +1,72 @@
+[
+  {
+    "jobId": "00000000000000000000000000000001",
+    "jobUrl": "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-00000000000000000000000000000001",
+    "applyUrl": "https://candidato.ar.computrabajo.com/match/?oi=00000000000000000000000000000001",
+    "title": "PRUEBA — Puesto 1",
+    "companyName": "PRUEBA Empresa ficticia",
+    "location": "Salta Capital, Salta",
+    "countryCode": "ar",
+    "descriptionText": "PRUEBA: descripción sintética para verificar la importación. No postularse.",
+    "publishDate": "Hace 8 horas",
+    "publishDateISO": "2099-12-31",
+    "scrapedAt": "2026-10-23T10:00:00.000Z",
+    "contentHash": "0000000000000001"
+  },
+  {
+    "jobId": "00000000000000000000000000000002",
+    "jobUrl": "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-00000000000000000000000000000002",
+    "applyUrl": "https://candidato.ar.computrabajo.com/match/?oi=00000000000000000000000000000002",
+    "title": "PRUEBA — Puesto 2",
+    "companyName": "PRUEBA Empresa ficticia",
+    "location": "General Güemes, Salta",
+    "countryCode": "ar",
+    "descriptionText": "PRUEBA: descripción sintética para verificar la importación. No postularse.",
+    "publishDate": "Hace 8 horas",
+    "publishDateISO": "2099-12-31",
+    "scrapedAt": "2026-10-23T10:00:00.000Z",
+    "contentHash": "0000000000000002"
+  },
+  {
+    "jobId": "00000000000000000000000000000003",
+    "jobUrl": "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-00000000000000000000000000000003",
+    "applyUrl": "https://candidato.ar.computrabajo.com/match/?oi=00000000000000000000000000000003",
+    "title": "PRUEBA — Puesto 3",
+    "companyName": "PRUEBA Empresa ficticia",
+    "location": "Tartagal, Salta",
+    "countryCode": "ar",
+    "descriptionText": "PRUEBA: descripción sintética para verificar la importación. No postularse.",
+    "publishDate": "Hace 8 horas",
+    "publishDateISO": "2099-12-31",
+    "scrapedAt": "2026-10-23T10:00:00.000Z",
+    "contentHash": "0000000000000003"
+  },
+  {
+    "jobId": "00000000000000000000000000000004",
+    "jobUrl": "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-00000000000000000000000000000004",
+    "applyUrl": "https://candidato.ar.computrabajo.com/match/?oi=00000000000000000000000000000004",
+    "title": "PRUEBA — Puesto 4",
+    "companyName": "PRUEBA Empresa ficticia",
+    "location": "Orán, Salta",
+    "countryCode": "ar",
+    "descriptionText": "PRUEBA: descripción sintética para verificar la importación. No postularse.",
+    "publishDate": "Hace 8 horas",
+    "publishDateISO": "2099-12-31",
+    "scrapedAt": "2026-10-23T10:00:00.000Z",
+    "contentHash": "0000000000000004"
+  },
+  {
+    "jobId": "00000000000000000000000000000005",
+    "jobUrl": "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-prueba-00000000000000000000000000000005",
+    "applyUrl": "https://candidato.ar.computrabajo.com/match/?oi=00000000000000000000000000000005",
+    "title": "PRUEBA — Puesto 5",
+    "companyName": "PRUEBA Empresa ficticia",
+    "location": "Cafayate, Salta",
+    "countryCode": "ar",
+    "descriptionText": "PRUEBA: descripción sintética para verificar la importación. No postularse.",
+    "publishDate": "Hace 8 horas",
+    "publishDateISO": "2099-12-31",
+    "scrapedAt": "2026-10-23T10:00:00.000Z",
+    "contentHash": "0000000000000005"
+  }
+]

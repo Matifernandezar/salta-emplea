@@ -151,7 +151,7 @@ def test_prepared_mail_diagnostic_never_claims_external_verification(configured,
 
 
 class ReadOnlyConnection:
-    def __init__(self, *, missing=False, version=1):
+    def __init__(self, *, missing=False, version=2):
         self.statements = []
         self.closed = False
         self.missing, self.version = missing, version
@@ -176,9 +176,9 @@ class ReadOnlyConnection:
         if 'information_schema' in self.statements[-1]:
             tables = ('schema_migrations', 'jobs', 'provenance', 'sources', 'reports',
                       'subscribers', 'outbox', 'deliveries', 'ads', 'settings', 'audit',
-                      'rate_limits', 'task_runs', 'uploads', 'task_locks')
+                      'rate_limits', 'task_runs', 'uploads', 'task_locks', 'external_jobs', 'apify_import_runs')
             return [(name,) for name in tables if not (self.missing and name == 'jobs')]
-        return [(self.version,)]
+        return [(version,) for version in range(1, self.version + 1)]
 
     def close(self):
         self.closed = True
@@ -200,7 +200,7 @@ def test_database_check_is_explicit_read_only_and_never_migrates(configured, mon
     assert connection.closed
 
 
-@pytest.mark.parametrize('overrides', [{'missing': True}, {'version': 2}])
+@pytest.mark.parametrize('overrides', [{'missing': True}, {'version': 1}, {'version': 3}])
 def test_existing_incomplete_or_incompatible_database_is_reported(configured, monkeypatch, overrides):
     import psycopg
     connection = ReadOnlyConnection(**overrides)
