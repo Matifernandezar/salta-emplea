@@ -14,12 +14,13 @@ No usar prefijos públicos para la clave. Los cambios requieren un nuevo desplie
 
 ## Uso desde el panel
 
-1. Entrar a `/admin`, incorporar una oferta con imagen y guardar para revisión.
-2. Abrir la oferta pendiente. Junto a la imagen, autorizar el envío a Claude y tocar **Leer imagen y preparar datos**.
-3. Revisar el original, la transcripción, los campos y sus respaldos. El texto extraído es una propuesta de Claude y puede contener errores.
-4. Guardar las correcciones y aprobar mediante la acción editorial existente.
+1. Entrar a `/admin/nueva`. La imagen es el primer campo del formulario.
+2. Con el permiso de envío activado, seleccionar la imagen: se guarda un borrador pendiente, se lee y se abre la revisión con los campos vacíos completados. No hace falta escribir el puesto ni tocar otro botón. Si se desactiva el permiso, no se envía la imagen al proveedor. Sin JavaScript, usar **Guardar para revisión**.
+3. En un aviso pendiente ya existente, la acción **Leer imagen y preparar datos** sigue disponible junto al original.
+4. Revisar el original, la transcripción, los campos y sus respaldos. El texto extraído es una propuesta de Claude y puede contener errores.
+5. Guardar las correcciones y aprobar mediante la acción editorial existente.
 
-La carga inicial permite autorizar la lectura; en ese caso se puede ejecutar el lote desde Automatización. Cada lote procesa como máximo una imagen. No se agrega ningún cron.
+La carga inicial ejecuta la lectura en la misma solicitud. Los avisos previamente autorizados también pueden procesarse desde Automatización. Cada lote procesa como máximo una imagen. No se agrega ningún cron.
 
 Claude solo puede recibir imágenes autorizadas desde administración. Los permisos anteriores para Google no autorizan el envío a Claude. Los resultados y reservas históricos se conservan. Una imagen con rechazo inequívoco admite hasta tres intentos manuales tras confirmar que se corrigió el acceso; una reserva inconclusa no se reenvía.
 

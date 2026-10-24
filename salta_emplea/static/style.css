@@ -3087,3 +3087,7 @@ td:first-child {
     animation:none
   }
 }
+
+/* La carga inicial comienza con la imagen, también en celular. */
+.review-layout-new { grid-template-columns: minmax(0, 1fr); }
+.image-first { scroll-margin-top: 1rem; }

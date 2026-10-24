@@ -6,7 +6,7 @@ import pytest
 
 from salta_emplea import claude_extraction as claude, extraction, image_pipeline, tasks
 from test_extraction import Response, PNG, KEY
-from test_image_pipeline import setup, add_image
+from test_image_pipeline import setup, add_image, png
 
 
 def data():
@@ -128,3 +128,47 @@ def test_explicit_pause_overrides_claude_key(setup):
     app, _, _ = setup
     config = cfg(app); config['OCR_ENABLED'] = '0'
     assert not image_pipeline.configured(config)
+
+
+def test_new_image_completes_blank_form_in_same_request_and_preserves_edits(setup, monkeypatch):
+    app, conn, client = setup
+    app.config.update(cfg(app))
+    calls = []
+    def provider(*args):
+        calls.append(1)
+        return claude._prepared(data())
+    monkeypatch.setattr(claude, 'extract_image', provider)
+    page = client.get('/admin/nueva')
+    html = page.data.decode()
+    assert html.index('name="image"') < html.index('name="title"')
+    assert "script-src 'self'" in page.headers['Content-Security-Policy']
+    response = client.post('/admin/nueva', data={'csrf_token': 'csrf-prueba',
+        'allow_ocr': '1', 'company': 'Empresa ya corregida', 'image': (png(), 'aviso.png')})
+    assert response.status_code == 302
+    job = conn.execute('SELECT * FROM jobs').fetchone()
+    assert job['title'] == 'Cajero' and job['company'] == 'Empresa ya corregida'
+    assert job['status'] == 'pending' and len(calls) == 1
+    assert 'Cajero' in client.get(response.location).data.decode()
+    # Reenviar la misma imagen reutiliza el borrador y no repite el cobro.
+    client.post('/admin/nueva', data={'csrf_token': 'csrf-prueba', 'allow_ocr': '1',
+        'image': (png(), 'aviso-otra-vez.png')})
+    assert len(calls) == 1 and conn.execute('SELECT count(*) FROM jobs').fetchone()[0] == 1
+
+
+def test_new_image_without_permission_or_failed_provider_stays_pending(setup, monkeypatch):
+    app, conn, client = setup
+    app.config.update(cfg(app))
+    calls = []
+    def provider(*args):
+        calls.append(1)
+        raise extraction.ExtractionError('anthropic_credentials_rejected')
+    monkeypatch.setattr(claude, 'extract_image', provider)
+    response = client.post('/admin/nueva', data={'csrf_token': 'csrf-prueba',
+        'image': (png(), 'aviso.png')})
+    assert response.status_code == 302 and not calls
+    response = client.post('/admin/nueva', data={'csrf_token': 'csrf-prueba',
+        'allow_ocr': '1', 'image': (png(), 'aviso.png')})
+    assert response.status_code == 302 and len(calls) == 1
+    assert conn.execute('SELECT status FROM jobs').fetchone()[0] == 'pending'
+    html = client.get(response.location).data.decode()
+    assert 'Claude rechazó el acceso' in html

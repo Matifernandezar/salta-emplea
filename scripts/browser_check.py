@@ -289,14 +289,13 @@ def run_image_circuit(browser, viewport, provider_name='google_vision'):
             no_horizontal_overflow(page)
 
             page.goto(origin + '/admin/nueva')
-            page.locator('[name="title"]').fill('Aviso pendiente de transcripción')
+            assert not page.locator('[name="title"]').get_attribute('required')
+            assert page.locator('[name="image"]').bounding_box()['y'] < page.locator('[name="title"]').bounding_box()['y']
             page.locator('[name="source_name"]').fill('PRUEBA imagen propia de QA')
             page.locator('[name="image"]').set_input_files({
                 'name': 'PRUEBA-aviso-ficticio.png', 'mimeType': 'image/png',
                 'buffer': image_buffer.getvalue(),
             })
-            page.locator('[name="allow_ocr"]').check()
-            page.get_by_role('button', name='Guardar para revisión').click()
             expect(page.get_by_role('heading', name='Revisar oferta')).to_be_visible()
             no_horizontal_overflow(page)
             jobs = rows(app, 'SELECT id,title,status,image_path,original_text FROM jobs')
@@ -304,9 +303,9 @@ def run_image_circuit(browser, viewport, provider_name='google_vision'):
             assert jobs[0]['title'] == 'Aviso pendiente de transcripción'
             assert jobs[0]['image_path'] and not jobs[0]['original_text']
             job_id = jobs[0]['id']
-            assert not provider_calls
+            assert len(provider_calls) == 1
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_authorized'")) == 1
-            assert not rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")
+            assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 1
             public = public_context.new_page()
             assert public.goto(f'{origin}/ofertas/{job_id}').status == 404
             private_image = public_context.request.get(

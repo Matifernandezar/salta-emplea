@@ -20,7 +20,7 @@
 <p>Compará empresa, puesto, contacto y ubicación antes de aprobar.</p>
 <ul>{% for duplicate in duplicates %}<li>
 <a href="{{ url_for('admin_edit', job_id=duplicate.id) }}">{{ duplicate.title|value }} · {{ duplicate.company|value }}</a>{% if duplicate.reason %} — {{ duplicate.reason }}{% endif %}{% if duplicate.score is defined %} (similitud registrada: {{ duplicate.score }}){% endif %}</li>{% endfor %}</ul>
-</div>{% endif %}<div class="review-layout">
+</div>{% endif %}<div class="review-layout{% if not job.id %} review-layout-new{% endif %}">{% if job.id %}
 <aside class="paper original-panel">
 <p class="eyebrow">Referencia</p>
 <h2>Aviso original</h2>
@@ -80,15 +80,22 @@
 <dt>{{ label }}</dt>
 <dd class="preserve-lines">{{ item.prepared_fields.get(field)|value }}</dd>
 </div>{% endfor %}</dl>
-</details>{% endif %}</article>{% endfor %}</details>{% endif %}</aside>
+</details>{% endif %}</article>{% endfor %}</details>{% endif %}</aside>{% endif %}
 <section class="paper form-paper prepared-panel">
 <p class="eyebrow">Versión preparada</p>
 <h2>Datos para publicar</h2>
 <p class="form-help">Guardá los cambios antes de cambiar el estado. Un cambio sustancial en una oferta aprobada vuelve a revisión.</p>
 <form method="post" enctype="multipart/form-data">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true) }}{% if not job.id %}<label class="field">Imagen original <span class="muted">(opcional)</span>
-<input type="file" name="image" accept="image/png,image/jpeg,image/webp">
-</label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if job.allow_ocr %} checked{% endif %}><span>Opcional: tengo permiso para enviar la imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }} para extraer texto.<small>Se envía solo la imagen y el resultado queda para revisión.</small></span></label>{% else %}<p class="form-help">La imagen se revisará manualmente; la lectura automática no está habilitada.</p>{% endif %}{% endif %}<button class="button" type="submit">Guardar para revisión</button>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% if not job.id %}<fieldset class="image-first">
+<legend>Primero, cargá la imagen del aviso</legend>
+<label class="field">Imagen original <span class="muted">(opcional)</span>
+<input type="file" name="image" accept="image/png,image/jpeg,image/webp" aria-describedby="image-extraction-status">
+</label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if not job or job.allow_ocr %} checked{% endif %}><span>Tengo permiso para enviar la imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }} para extraer texto.<small>Al seleccionar una imagen, se completan automáticamente los campos vacíos. Después revisás y decidís si publicar.</small></span></label>{% else %}<p class="form-help">La imagen se guardará para revisión manual; la lectura automática no está habilitada.</p>{% endif %}
+<p id="image-extraction-status" class="form-help" role="status" aria-live="polite">{% if image_state.ready %}Elegí la imagen para preparar el borrador. También podés completar los datos manualmente.{% else %}Podés continuar completando los datos manualmente.{% endif %}</p>
+<noscript><p>Seleccioná la imagen y tocá Guardar para revisión para completar el borrador.</p></noscript>
+</fieldset>{% endif %}
+{{ offer_fields(job, admin=true, require_title=job.id is defined and job.id) }}<button class="button" type="submit">Guardar para revisión</button>
 </form>
 </section>
 </div>{% if job.id %}<section class="paper transition-panel">
@@ -104,4 +111,4 @@
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <button class="button button-outline" type="submit">{{ label }}</button>
 </form>{% endfor %}{% if job.status in ['approved', 'published'] %}<a class="text-link" href="{{ url_for('job_detail', job_id=job.id) }}">Ver publicación ↗</a>{% endif %}</div>
-</section>{% endif %}</div>{% endblock %}
+</section>{% endif %}</div>{% if not job.id and image_state.ready %}<script src="{{ url_for('static', filename='admin-image.js') }}" defer></script>{% endif %}{% endblock %}

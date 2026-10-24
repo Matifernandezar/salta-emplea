@@ -53,12 +53,12 @@
 </nav>
 {%- endmacro %}
 
-{% macro offer_fields(data, admin=false) -%}
+{% macro offer_fields(data, admin=false, require_title=true) -%}
   <fieldset>
 <legend>Datos del empleo</legend>
 <p class="form-help">Transcribí solo lo que dice el aviso. Si falta un dato, dejá el campo vacío.</p>
     <div class="form-grid">
-      <label class="field span-2">Puesto{% if admin %} <span class="required">*</span>{% else %} <span class="muted">(si está informado)</span>{% endif %}<input name="title" value="{{ data.title|default('', true) }}" maxlength="180"{% if admin %} required{% endif %} autocomplete="off">
+      <label class="field span-2">Puesto{% if admin and require_title %} <span class="required">*</span>{% else %} <span class="muted">(si está informado)</span>{% endif %}<input name="title" value="{{ data.title|default('', true) }}" maxlength="180"{% if admin and require_title %} required{% endif %} autocomplete="off">
 </label>
       <label class="field">Empresa<input name="company" value="{{ data.company|default('', true) }}" maxlength="180">
 </label>

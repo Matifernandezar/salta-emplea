@@ -170,6 +170,8 @@ def create_app(config=None):
     @app.after_request
     def headers(response):
         response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        if request.endpoint == 'admin_new' and session.get('admin'):
+            response.headers['Content-Security-Policy'] = response.headers['Content-Security-Policy'].replace("script-src 'none'", "script-src 'self'")
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
@@ -521,6 +523,19 @@ def create_app(config=None):
                 data = job_form()
                 job_id, _ = domain.create_job(connection(), data, actor='administrador')
                 image_consent(job_id, 'administrador', data.get('image_path'))
+                if request.form.get('allow_ocr') == '1' and data.get('image_path') and image_pipeline.configured(app.config):
+                    from . import tasks
+                    limited('admin_automation', 6, 600)
+                    try:
+                        result = tasks.run_tasks(connection(), dict(app.config, OCR_JOB_ID=job_id,
+                            TASK_BUDGET_SECONDS=60), only='extract')
+                        if result.get('images', {}).get('quota_reached'):
+                            flash('Se alcanzó el cupo mensual. El borrador quedó guardado para completar manualmente.', 'error')
+                        elif result.get('skipped'):
+                            flash('Hay otra tarea en curso. El borrador quedó guardado; podés solicitar la lectura desde la oferta.', 'success')
+                    except Exception:
+                        connection().rollback()
+                        flash('La imagen quedó guardada. No se pudo completar la lectura; revisá el resultado antes de reintentar.', 'error')
                 return redirect(url_for('admin_edit', job_id=job_id))
             except ValueError as exc:
                 flash(str(exc), 'error')
