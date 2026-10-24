@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
-from salta_emplea import db, extraction
+from salta_emplea import db, extraction, claude_extraction
 from salta_emplea.app import create_app
 
 PASSWORD = 'PRUEBA-contraseña-ficticia-solo-navegador'
@@ -210,7 +210,7 @@ def run_circuit(browser, viewport):
             context.close()
 
 
-def run_image_circuit(browser, viewport):
+def run_image_circuit(browser, viewport, provider_name='google_vision'):
     """Imagen PRUEBA, rechazo y reintento con proveedor sustituido; sin Google real."""
     title = 'PRUEBA — Operador de comercio desde imagen'
     literal_text = (
@@ -228,23 +228,34 @@ def run_image_circuit(browser, viewport):
     image.close()
     provider_calls = []
 
-    def substituted_ocr(content, api_key):
+    key = 'PRUEBA-claude-ficticia' if provider_name == 'anthropic' else 'PRUEBA-google-vision-ficticia'
+    rejection = 'anthropic_credentials_rejected' if provider_name == 'anthropic' else 'credentials_rejected'
+    module = 'claude_extraction' if provider_name == 'anthropic' else 'extraction'
+
+    def substituted_ocr(content, api_key, *_args):
         # save_image debe recibir el PNG y normalizarlo antes de la lectura.
         assert content.startswith(b'\xff\xd8\xff')
-        assert api_key == 'PRUEBA-google-vision-ficticia'
+        assert api_key == key
         with Image.open(BytesIO(content)) as received:
             received.verify()
         provider_calls.append(len(content))
         if len(provider_calls) == 1:
-            raise extraction.ExtractionError('credentials_rejected')
+            raise extraction.ExtractionError(rejection)
+        if provider_name == 'anthropic':
+            prepared = extraction.prepare_text(literal_text)
+            return claude_extraction._prepared({'text': literal_text, 'fields': {
+                field: {'value': value, 'evidence': prepared['evidence'][field]}
+                for field, value in prepared['fields'].items() if field in claude_extraction.LABELS}})
         return {'text': literal_text, 'provider': 'google_vision', 'warnings': []}
 
     with isolated_server() as (app, origin), patch(
-            'salta_emplea.extraction.extract_image', side_effect=substituted_ocr):
+            f'salta_emplea.{module}.extract_image', side_effect=substituted_ocr):
         # Sólo este servidor local usa la configuración productiva con credencial
         # ficticia; el proveedor está sustituido y las cookies quedan en HTTP local.
         app.config.update(APP_ENV='production', OCR_ENABLED='1', OCR_MONTHLY_LIMIT=3,
-                          GOOGLE_VISION_API_KEY='PRUEBA-google-vision-ficticia',
+                          GOOGLE_VISION_API_KEY=key if provider_name == 'google_vision' else '',
+                          ANTHROPIC_API_KEY=key if provider_name == 'anthropic' else '',
+                          OCR_PROVIDER=provider_name,
                           SESSION_COOKIE_SECURE=False)
         settings = {'viewport': viewport, 'is_mobile': viewport['width'] < 600,
                     'has_touch': viewport['width'] < 600}
@@ -309,24 +320,24 @@ def run_image_circuit(browser, viewport):
             expect(page.get_by_role('status')).to_contain_text('Corrida registrada')
             assert len(provider_calls) == 1
             page.goto(f'{origin}/admin/ofertas/{job_id}')
-            expect(page.locator('.notice-error').filter(has_text='Google rechazó el acceso.')).to_be_visible()
+            expect(page.locator('.notice-error').filter(has_text=str(extraction.ExtractionError(rejection)))).to_be_visible()
             expect(page.locator('[name="title"]')).to_have_value('Aviso pendiente de transcripción')
             expect(page.locator('[name="application_url"]')).to_have_value('')
-            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_be_visible()
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir el acceso')).to_be_visible()
             no_horizontal_overflow(page)
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 1
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_failed'")) == 1
             assert not rows(app, "SELECT id FROM audit WHERE action='ocr_completed'")
             # Consultar o recargar el resultado no concede permiso para reenviar.
             page.reload()
-            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_be_visible()
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir el acceso')).to_be_visible()
             assert len(provider_calls) == 1
             retry = page.locator('form').filter(has=page.get_by_role(
-                'button', name='Reintentar lectura tras corregir Google'))
+                'button', name='Reintentar lectura tras corregir el acceso'))
             assert int(retry.locator('[name="failed_event_id"]').input_value()) > 0
             retry.locator('[name="configuration_checked"]').check()
             retry.locator('[name="allow_ocr"]').check()
-            retry.get_by_role('button', name='Reintentar lectura tras corregir Google').click()
+            retry.get_by_role('button', name='Reintentar lectura tras corregir el acceso').click()
             expect(page.get_by_role('status')).to_contain_text('Reintento registrado')
             assert len(provider_calls) == 2
             expect(page.locator('[name="title"]')).to_have_value(title)
@@ -334,7 +345,7 @@ def run_image_circuit(browser, viewport):
             expect(page.get_by_text('Pendiente de revisión', exact=True)).to_be_visible()
             expect(page.get_by_text('Lectura recibida.', exact=False)).to_be_visible()
             expect(page.get_by_role('button', name='Leer imagen y preparar datos')).to_have_count(0)
-            expect(page.get_by_role('button', name='Reintentar lectura tras corregir Google')).to_have_count(0)
+            expect(page.get_by_role('button', name='Reintentar lectura tras corregir el acceso')).to_have_count(0)
             no_horizontal_overflow(page)
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_reserved'")) == 2
             assert len(rows(app, "SELECT id FROM audit WHERE action='ocr_failed'")) == 1
@@ -571,6 +582,7 @@ def main():
             for viewport in ({'width': 390, 'height': 844}, {'width': 1440, 'height': 1000}):
                 run_circuit(browser, viewport)
                 run_image_circuit(browser, viewport)
+                run_image_circuit(browser, viewport, 'anthropic')
             check_access_helper(browser)
             if args.check_public:
                 mode = check_public(browser)
