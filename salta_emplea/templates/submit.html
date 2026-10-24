@@ -16,7 +16,7 @@
 </label>
 </div>{{ offer_fields(data) }}{% if image_state.ready %}<label class="check-field">
 <input type="checkbox" name="allow_ocr" value="1"{% if data.allow_ocr %} checked{% endif %}>
-<span>Opcional: tengo permiso para enviar la imagen a Google Cloud Vision para extraer texto.<small>Se envía solo la imagen. La lectura puede contener errores y queda pendiente de revisión; también podés compartirla sin lectura automática.</small></span>
+<span>Opcional: tengo permiso para enviar la imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }} para extraer texto.<small>Se envía solo la imagen. La lectura puede contener errores y queda pendiente de revisión; también podés compartirla sin lectura automática.</small></span>
 </label>{% else %}<p class="form-help">La imagen queda disponible para revisión manual. La lectura automática no está habilitada.</p>{% endif %}<label class="check-field">
 <input type="checkbox" name="consent" value="1" required{% if data.consent %} checked{% endif %}>
 <span>Confirmo que puedo compartir este aviso y que no incluye CV ni datos personales ajenos. Acepto las <a href="{{ url_for('terms') }}">condiciones</a>.</span>

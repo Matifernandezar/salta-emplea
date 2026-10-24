@@ -57,7 +57,10 @@ def create_app(config=None):
         OPERATIONS_MAIL_MAX_AGE_HOURS=os.environ.get('OPERATIONS_MAIL_MAX_AGE_HOURS', '48'),
         OPERATIONS_MAIL_QUEUE_MAX_AGE_HOURS=os.environ.get('OPERATIONS_MAIL_QUEUE_MAX_AGE_HOURS', '48'),
         GOOGLE_VISION_API_KEY=os.environ.get('GOOGLE_VISION_API_KEY', ''),
-        OCR_ENABLED=os.environ.get('OCR_ENABLED', '0'),
+        ANTHROPIC_API_KEY=os.environ.get('ANTHROPIC_API_KEY', ''),
+        ANTHROPIC_MODEL=os.environ.get('ANTHROPIC_MODEL', 'claude-haiku-5-5'),
+        OCR_PROVIDER=os.environ.get('OCR_PROVIDER', ''),
+        OCR_ENABLED=os.environ.get('OCR_ENABLED'),
         OCR_MONTHLY_LIMIT=os.environ.get('OCR_MONTHLY_LIMIT', '100'),
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
@@ -341,6 +344,8 @@ def create_app(config=None):
         return data
 
     def image_consent(job_id, actor, uploaded_name):
+        if image_pipeline.provider(app.config) == 'anthropic' and actor != 'administrador':
+            return
         if request.form.get('allow_ocr') == '1' and image_pipeline.configured(app.config):
             row = connection().execute('SELECT image_path,status FROM jobs WHERE id=?', (job_id,)).fetchone()
             # Un duplicado público no autoriza el archivo privado que ya existía.
@@ -364,7 +369,9 @@ def create_app(config=None):
                 except ValueError as exc:
                     errors.append(str(exc))
         return render_template('submit.html', data=request.form, errors=errors,
-                               image_status=image_pipeline.status(connection(), app.config))
+                               image_status=dict(image_pipeline.status(connection(), app.config),
+                                   ready=False) if image_pipeline.provider(app.config) == 'anthropic'
+                                   else image_pipeline.status(connection(), app.config))
 
     @app.route('/admin/ingresar', methods=['GET', 'POST'])
     def login():
@@ -555,7 +562,7 @@ def create_app(config=None):
     def admin_retry_image(job_id):
         limited('admin_automation', 6, 600)
         if request.form.get('allow_ocr') != '1' or request.form.get('configuration_checked') != '1':
-            abort(400, 'Confirmá el permiso y que revisaste la configuración de Google antes de reintentar.')
+            abort(400, 'Confirmá el permiso y que revisaste la configuración del proveedor antes de reintentar.')
         if not image_pipeline.configured(app.config):
             flash('La lectura está pendiente de configuración. No se envió ninguna imagen.', 'error')
             return redirect(url_for('admin_edit', job_id=job_id))

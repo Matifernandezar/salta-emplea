@@ -24,6 +24,9 @@ MAX_TEXT_CHARS = 20000
 REQUEST_TIMEOUT = 20
 
 _ERROR_MESSAGES = {
+    "anthropic_credentials_rejected": "Claude rechazó el acceso. Revisá ANTHROPIC_API_KEY y los permisos de la clave en Vercel.",
+    "anthropic_billing_rejected": "Claude rechazó la facturación. Revisá el saldo y los límites de tu cuenta de Anthropic.",
+    "anthropic_model_rejected": "El modelo de Claude no está disponible. Revisá ANTHROPIC_MODEL y el acceso de tu cuenta.",
     "not_configured": "La lectura de imágenes no está configurada.",
     "invalid_image": "La imagen debe ser JPEG, PNG o WebP.",
     "image_too_large": "La imagen excede el máximo de 4 MB.",
@@ -48,6 +51,7 @@ _ERROR_MESSAGES = {
 # explícita, una vez corregida la configuración. No implican un reintento
 # automático ni permiten deducir nada del texto libre recibido del proveedor.
 REJECTED_CODES = frozenset({
+    "anthropic_credentials_rejected", "anthropic_billing_rejected", "anthropic_model_rejected",
     "credentials_rejected", "api_key_invalid", "api_key_expired",
     "api_key_restricted", "service_disabled", "billing_disabled",
 })

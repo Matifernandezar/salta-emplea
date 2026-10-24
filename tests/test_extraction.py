@@ -353,6 +353,7 @@ def test_fallo_al_leer_el_cuerpo_no_oculta_un_rechazo_http_confirmado():
 
 def test_solo_rechazos_inequivocos_permiten_un_nuevo_intento_explicito():
     assert extraction.REJECTED_CODES == frozenset({
+        "anthropic_credentials_rejected", "anthropic_billing_rejected", "anthropic_model_rejected",
         "credentials_rejected", "api_key_invalid", "api_key_expired",
         "api_key_restricted", "service_disabled", "billing_disabled",
     })

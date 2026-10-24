@@ -10,7 +10,7 @@ import re
 import time
 from pathlib import Path
 
-from . import db, domain, extraction
+from . import db, domain, extraction, claude_extraction
 
 
 ACTIONS = ('ocr_reserved', 'ocr_completed', 'ocr_failed')
@@ -34,9 +34,28 @@ def monthly_limit(config):
         return 0
 
 
+def provider(config):
+    return config.get('OCR_PROVIDER') or ('anthropic' if config.get('ANTHROPIC_API_KEY') else 'google_vision')
+
+
+def key_present(config):
+    return bool(config.get('ANTHROPIC_API_KEY') if provider(config) == 'anthropic'
+                else config.get('GOOGLE_VISION_API_KEY'))
+
+
+def enabled(config):
+    # La clave de Claude habilita el circuito manual salvo desactivación explícita.
+    value = config.get('OCR_ENABLED')
+    return value in (True, 1, '1') or (value is None and provider(config) == 'anthropic')
+
+
+def provider_label(config):
+    return 'Claude (Anthropic)' if provider(config) == 'anthropic' else 'Google Cloud Vision'
+
+
 def configured(config):
-    return (config.get('OCR_ENABLED') in (True, 1, '1')
-            and bool(config.get('GOOGLE_VISION_API_KEY'))
+    return (enabled(config)
+            and key_present(config) and provider(config) in ('anthropic', 'google_vision')
             and config.get('APP_ENV') == 'production' and monthly_limit(config) > 0)
 
 
@@ -80,10 +99,10 @@ def authorize(conn, job_id, config, actor):
         raise ValueError('La lectura requiere un aviso pendiente con imagen.')
     digest = hashlib.sha256(image_bytes(conn, config, row['image_path'])).hexdigest()
     # Un permiso previo no autoriza un archivo distinto.
-    if not any(data.get('image_hash') == digest for _, data in _details(conn, job_id, ('ocr_authorized',), row['image_path'])):
+    if not any(data.get('image_hash') == digest and data.get('provider', 'google_vision') == provider(config) for _, data in _details(conn, job_id, ('ocr_authorized',), row['image_path'])):
         with conn:
             _event(conn, job_id, 'ocr_authorized', {'image_hash': digest, 'image_path': row['image_path'],
-                    'provider': 'google_vision'}, actor)
+                    'provider': provider(config)}, actor)
     return digest
 
 
@@ -139,8 +158,10 @@ def authorize_retry(conn, job_id, config, failed_event_id, actor):
         if digest != result.get('image_hash'):
             raise ValueError('La imagen cambió; esta autorización no corresponde al archivo actual.')
         if not _retry_ticket(conn, job_id, job['image_path'], digest, result):
+            _event(conn, job_id, 'ocr_authorized', {'image_path': job['image_path'], 'image_hash': digest,
+                    'provider': provider(config)}, actor)
             _event(conn, job_id, 'ocr_retry_authorized', {'image_path': job['image_path'], 'image_hash': digest,
-                    'failed_event_id': result['event_id'], 'provider': 'google_vision'}, actor)
+                    'failed_event_id': result['event_id'], 'provider': provider(config)}, actor)
 
 
 def usage(conn):
@@ -148,11 +169,22 @@ def usage(conn):
     return conn.execute("SELECT count(*) FROM audit WHERE action='ocr_reserved' AND created_at>=?", (start,)).fetchone()[0]
 
 
+def _provider_pending(config):
+    # Filtrar antes del LIMIT evita que permisos viejos de otro proveedor
+    # oculten los avisos nuevos y mantiene correcto el contador del panel.
+    if provider(config) != 'anthropic':
+        return ''
+    return """ AND EXISTS (SELECT 1 FROM audit consent WHERE consent.entity_id=j.id
+        AND consent.action='ocr_authorized'
+        AND consent.detail LIKE '%"provider": "anthropic"%'
+        AND consent.detail LIKE '%"image_path": "' || j.image_path || '"%')"""
+
+
 def status(conn, config):
     used = usage(conn)
-    return {'ready': configured(config) and used < monthly_limit(config), 'enabled': config.get('OCR_ENABLED') in (True, 1, '1'),
-            'key_present': bool(config.get('GOOGLE_VISION_API_KEY')), 'monthly_limit': monthly_limit(config),
-            'used': used, 'pending': conn.execute('SELECT count(*) ' + _PENDING_SQL).fetchone()[0]}
+    return {'ready': configured(config) and used < monthly_limit(config), 'enabled': enabled(config), 'provider_label': provider_label(config),
+            'key_present': key_present(config), 'monthly_limit': monthly_limit(config),
+            'used': used, 'pending': conn.execute('SELECT count(*) ' + _PENDING_SQL + _provider_pending(config)).fetchone()[0]}
 
 
 def _snapshot(job):
@@ -173,7 +205,7 @@ def process(conn, config, *, deadline=None):
         parameters.append(int(config['OCR_JOB_ID']))
     # Solo candidatos con permiso para este archivo y sin intento previo. La
     # referencia siempre es un nombre hexadecimal generado por save_image.
-    candidates = conn.execute('SELECT j.* ' + _PENDING_SQL + clause + ' ORDER BY j.id LIMIT 200', parameters).fetchall()
+    candidates = conn.execute('SELECT j.* ' + _PENDING_SQL + _provider_pending(config) + clause + ' ORDER BY j.id LIMIT 200', parameters).fetchall()
     for row in candidates:
         if deadline is not None and time.monotonic() + 22 >= deadline:
             return dict(result, budget_exhausted=True)
@@ -185,14 +217,14 @@ def process(conn, config, *, deadline=None):
             result['skipped'] += 1
             continue
         digest = hashlib.sha256(content).hexdigest()
-        if not any(detail.get('image_hash') == digest for _, detail in _details(conn, job['id'], ('ocr_authorized',), job['image_path'])):
+        if not any(detail.get('image_hash') == digest and detail.get('provider', 'google_vision') == provider(config) for _, detail in _details(conn, job['id'], ('ocr_authorized',), job['image_path'])):
             result['skipped'] += 1
             continue
         ticket = _retry_ticket(conn, job['id'], job['image_path'], digest, existing) if existing else None
         if existing and not ticket:
             result['skipped'] += 1
             continue
-        reservation = {'image_hash': digest, 'image_path': job['image_path'], 'provider': 'google_vision'}
+        reservation = {'image_hash': digest, 'image_path': job['image_path'], 'provider': provider(config)}
         if ticket:
             reservation.update(retry_event_id=ticket['event_id'], failed_event_id=existing['event_id'])
         # Confirmar reserva ANTES de consultar; sobrevivirá a cortes o reinicios.
@@ -205,8 +237,12 @@ def process(conn, config, *, deadline=None):
             _event(conn, job['id'], 'ocr_reserved', reservation)
         result['processed'] += 1
         try:
-            received = extraction.extract_image(content, config['GOOGLE_VISION_API_KEY'])
-            prepared = extraction.prepare_text(received['text'])
+            if provider(config) == 'anthropic':
+                received = claude_extraction.extract_image(content, config['ANTHROPIC_API_KEY'],
+                    config.get('ANTHROPIC_MODEL') or claude_extraction.DEFAULT_MODEL)
+            else:
+                received = extraction.extract_image(content, config['GOOGLE_VISION_API_KEY'])
+            prepared = received.get('prepared') or extraction.prepare_text(received['text'])
             detail = dict(reservation, text=received['text'], fields=prepared['fields'], evidence=prepared['evidence'],
                           uncertain_fields=prepared['uncertain_fields'], warnings=received.get('warnings', []), applied=False)
             with conn:

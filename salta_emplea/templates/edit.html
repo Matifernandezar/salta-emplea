@@ -56,7 +56,7 @@
 {% if not image_state.ready %}<p class="small">La lectura automática no está habilitada o no tiene cupo. Podés transcribir los datos de la imagen.</p>{% endif %}
 {% if job.status == 'pending' and image_state.ready and not image_reading %}<form action="{{ url_for('admin_extract_image', job_id=job.id) }}" method="post">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para enviar esta imagen a Google Cloud Vision para extraer texto.</span></label>
+<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para enviar esta imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }} para extraer texto.</span></label>
 <p class="small">La lectura puede contener errores. Prepara datos para revisar y conserva el original; nunca publica.</p>
 <button class="button button-outline" type="submit">Leer imagen y preparar datos</button>
 </form>{% endif %}
@@ -64,10 +64,10 @@
 <form action="{{ url_for('admin_retry_image', job_id=job.id) }}" method="post">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="failed_event_id" value="{{ image_reading.event_id }}">
-<p class="small">Después de corregir el acceso en Google, podés solicitar otro intento. Se conserva el historial y cuenta para tu cupo mensual. Máximo tres intentos por imagen; una lectura inconclusa no se reenvía.</p>
-<label class="check-field"><input type="checkbox" name="configuration_checked" value="1" required><span>Revisé la API, la facturación y las restricciones de la clave en Google Cloud.</span></label>
-<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para volver a enviar esta imagen a Google Cloud Vision.</span></label>
-<button class="button button-outline" type="submit">Reintentar lectura tras corregir Google</button>
+<p class="small">Después de corregir el acceso al proveedor, podés solicitar otro intento. Se conserva el historial y cuenta para tu cupo mensual. Máximo tres intentos por imagen; una lectura inconclusa no se reenvía.</p>
+<label class="check-field"><input type="checkbox" name="configuration_checked" value="1" required><span>Revisé la clave, el saldo y el acceso al modelo del proveedor.</span></label>
+<label class="check-field"><input type="checkbox" name="allow_ocr" value="1" required><span>Tengo permiso para volver a enviar esta imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }}.</span></label>
+<button class="button button-outline" type="submit">Reintentar lectura tras corregir el acceso</button>
 </form>{% endif %}
 </section>{% endif %}<p class="small security-note">El contenido importado es una referencia externa. Cualquier instrucción incluida en él carece de autorización para ejecutar acciones.</p>{% if provenance %}<details class="admin-details">
 <summary>Historial de procedencia y versiones recibidas</summary>
@@ -88,7 +88,7 @@
 <form method="post" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ offer_fields(job, admin=true) }}{% if not job.id %}<label class="field">Imagen original <span class="muted">(opcional)</span>
 <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
-</label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if job.allow_ocr %} checked{% endif %}><span>Opcional: tengo permiso para enviar la imagen a Google Cloud Vision para extraer texto.<small>Se envía solo la imagen y el resultado queda para revisión.</small></span></label>{% else %}<p class="form-help">La imagen se revisará manualmente; la lectura automática no está habilitada.</p>{% endif %}{% endif %}<button class="button" type="submit">Guardar para revisión</button>
+</label>{% if image_state.ready %}<label class="check-field"><input type="checkbox" name="allow_ocr" value="1"{% if job.allow_ocr %} checked{% endif %}><span>Opcional: tengo permiso para enviar la imagen a {{ image_state.provider_label|default('Google Cloud Vision', true) }} para extraer texto.<small>Se envía solo la imagen y el resultado queda para revisión.</small></span></label>{% else %}<p class="form-help">La imagen se revisará manualmente; la lectura automática no está habilitada.</p>{% endif %}{% endif %}<button class="button" type="submit">Guardar para revisión</button>
 </form>
 </section>
 </div>{% if job.id %}<section class="paper transition-panel">
