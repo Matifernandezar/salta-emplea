@@ -24,7 +24,7 @@ from scripts.browser_check import isolated_server, no_horizontal_overflow, open_
 APPLICATION = 'https://example.test/postularse/PRUEBA-portada'
 TITLE = 'PRUEBA — Auxiliar de Administración'
 LOCATION = 'San Ramón de la Nueva Orán'
-SECTOR = 'Administración'
+SECTOR = 'Administración / Oficina'
 SCHEDULE = 'Jornada parcial'
 WIDTHS = (360, 390, 768, 1024, 1440)
 CANONICAL_ORIGIN = 'https://preview.example.test'
