@@ -4,6 +4,7 @@ No clasifica ocupaciones ni deduce experiencia o residencia. Los enlaces son
 filtros de la portada existente, no nuevas categorías indexables.
 """
 
+from . import categories
 from collections import Counter
 import unicodedata
 from urllib.parse import urlencode
@@ -11,7 +12,7 @@ from urllib.parse import urlencode
 
 FILTER_KEYS = ('q', 'location', 'sector', 'modality', 'schedule', 'days')
 _FILTER_LABELS = {
-    'q': 'Búsqueda', 'location': 'Ubicación', 'sector': 'Rubro',
+    'q': 'Búsqueda', 'location': 'Ubicación', 'sector': 'Categoría',
     'modality': 'Modalidad', 'schedule': 'Jornada',
 }
 _PART_TIME_SCHEDULES = {
@@ -34,7 +35,9 @@ def search_filters(arguments):
             value = arguments.get('date_days')
         if value is not None and str(value).strip():
             value = str(value).strip()
-            if key == 'modality':
+            if key == 'sector':
+                value = categories.known(value) or value
+            elif key == 'modality':
                 value = _MODALITIES.get(_fold(value), value)
             elif key == 'days':
                 try:
@@ -67,10 +70,9 @@ def _selection_url(index_url, filters, **updates):
 
 
 def facets(jobs, filters):
-    """Las opciones provienen del inventario; conserva una selección sin filas."""
+    """Localidades y jornadas del inventario; categorías del catálogo cerrado."""
     result = {}
-    for name, field in (('locations', 'location'), ('sectors', 'sector'),
-                        ('schedules', 'schedule')):
+    for name, field in (('locations', 'location'), ('schedules', 'schedule')):
         options = {job[field] for job in jobs if job.get(field) and
                    (field != 'location' or job.get('modality') != 'remota')}
         # Si cambió el inventario o se ingresó una variante con/sin tilde, el
@@ -78,10 +80,13 @@ def facets(jobs, filters):
         if filters.get(field):
             options.add(filters[field])
         result[name] = sorted(options, key=lambda value: (_fold(value), value))
+    result['sectors'] = list(categories.CATEGORIES)
     return result
 
 
 def _links(index_url, jobs, field, *, physical_only=False):
+    if field == 'sector':
+        jobs = [dict(job, sector=categories.normalize(job.get('sector'))) for job in jobs]
     counts = Counter(job[field] for job in jobs if job.get(field) and
                      (not physical_only or job.get('modality') != 'remota'))
     return [

@@ -67,7 +67,7 @@
       <label class="field">Modalidad<select name="modality">
 <option value="">No informado</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if data.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select>
 </label>
-      <label class="field">Rubro<input name="sector" value="{{ data.sector|default('', true) }}" maxlength="120">
+      <label class="field">Categoría<select name="sector"><option value="">Seleccionar categoría</option>{% for category in job_categories %}<option value="{{ category }}"{% if data.sector|category == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select>
 </label>
       <label class="field">Jornada<input name="schedule" value="{{ data.schedule|default('', true) }}" maxlength="120" placeholder="Por ejemplo: jornada completa">
 </label>

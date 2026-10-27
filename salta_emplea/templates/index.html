@@ -22,10 +22,10 @@
         <button class="button" type="submit">Buscar empleos <span aria-hidden="true">→</span></button>
       </div>
       <details class="search-extra"{% if filters.sector or filters.modality or filters.schedule or filters.days %} open{% endif %}>
-        <summary>Más filtros <span class="summary-hint">Rubro, modalidad, jornada y fecha</span></summary>
+        <summary>Más filtros <span class="summary-hint">Categoría, modalidad, jornada y fecha</span></summary>
         <div class="filter-grid">
-          <label class="field" for="search-sector">Rubro
-            <select id="search-sector" name="sector"><option value="">Todos los rubros</option>{% for option in facets.sectors %}<option value="{{ option }}"{% if filters.sector == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+          <label class="field" for="search-sector">Categoría
+            <select id="search-sector" name="sector"><option value="">Todas las categorías</option>{% for option in facets.sectors %}<option value="{{ option }}"{% if filters.sector == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
           </label>
           <label class="field" for="search-modality">Modalidad
             <select id="search-modality" name="modality"><option value="">Todas las modalidades</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if filters.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}{% if filters.modality and filters.modality not in ['presencial','híbrida','remota'] %}<option value="{{ filters.modality }}" selected>Selección actual: {{ filters.modality }}</option>{% endif %}</select>
@@ -79,8 +79,8 @@
   {% for ad in ads if ad.placement == 'home' %}<div class="home-ad">{{ ad_card(ad) }}</div>{% endfor %}
 </section>
 <section id="rubros" class="container section-space browse-section" aria-labelledby="sectors-title">
-  <div class="section-heading"><div><p class="eyebrow">Encontrá tu área</p><h2 id="sectors-title">Explorá por rubro</h2><p>Rubros informados en las ofertas publicadas.</p></div></div>
-  {% if home.sector_links %}<div class="browse-grid">{% for link in home.sector_links %}<a class="browse-link" href="{{ link.url }}"><strong>{{ link.label }}</strong><span>{{ link.count }} {% if link.count == 1 %}oferta{% else %}ofertas{% endif %} <span aria-hidden="true">↗</span></span></a>{% endfor %}</div>{% else %}<p class="browse-empty">Cuando haya avisos con rubro informado, vas a poder explorarlos desde acá. También podés buscar por palabras.</p>{% endif %}
+  <div class="section-heading"><div><p class="eyebrow">Encontrá tu área</p><h2 id="sectors-title">Explorá por categoría</h2><p>Categorías de las ofertas publicadas.</p></div></div>
+  {% if home.sector_links %}<div class="browse-grid">{% for link in home.sector_links %}<a class="browse-link" href="{{ link.url }}"><strong>{{ link.label }}</strong><span>{{ link.count }} {% if link.count == 1 %}oferta{% else %}ofertas{% endif %} <span aria-hidden="true">↗</span></span></a>{% endfor %}</div>{% else %}<p class="browse-empty">Cuando haya avisos con categoría informada, vas a poder explorarlos desde acá. También podés buscar por palabras.</p>{% endif %}
 </section>
 {% if home.location_links %}<section id="ubicaciones" class="container section-space browse-section" aria-labelledby="locations-title"><div class="section-heading"><div><p class="eyebrow">Cerca de donde estás</p><h2 id="locations-title">Buscá por localidad</h2><p>Lugares de trabajo informados en avisos presenciales e híbridos. La modalidad remota se consulta por separado.</p></div></div><div class="browse-grid">{% for link in home.location_links %}<a class="browse-link" href="{{ link.url }}"><strong>{{ link.label }}</strong><span>{{ link.count }} {% if link.count == 1 %}oferta{% else %}ofertas{% endif %} <span aria-hidden="true">↗</span></span></a>{% endfor %}</div></section>{% endif %}
 <section id="guias" class="container section-space guides-section" aria-labelledby="guides-title"><div class="section-heading"><div><p class="eyebrow">Un paso más para tu búsqueda</p><h2 id="guides-title">Guías prácticas</h2><p>Consejos claros para preparar tu próxima postulación.</p></div></div><div class="guide-grid">{% for guide in guides %}<article class="guide-card"><span class="guide-number" aria-hidden="true">0{{ loop.index }}</span><h3><a href="{{ url_for('guide_detail', slug=guide.slug) }}">{{ guide.title }}</a></h3><p>{{ guide.summary }}</p><a class="text-link" href="{{ url_for('guide_detail', slug=guide.slug) }}" aria-label="Leer guía: {{ guide.title }}">Leer guía <span aria-hidden="true">↗</span></a></article>{% endfor %}</div></section>

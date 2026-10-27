@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from . import db
+from . import db, categories
 from zoneinfo import ZoneInfo
 
 
@@ -219,6 +219,7 @@ def job_dict(row):
     if row is None:
         return None
     data = dict(row)
+    data['sector'] = categories.normalize(data.get('sector'))
     for field in ("flags", "uncertain_fields"):
         if field in data:
             data[field] = _list(data[field])
@@ -348,7 +349,7 @@ def public_jobs(conn, filters=None):
         pattern = "%" + _fold(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         conditions.append("(fold(title) LIKE ? ESCAPE '\\' OR fold(company) LIKE ? ESCAPE '\\' OR fold(description) LIKE ? ESCAPE '\\' OR fold(requirements) LIKE ? ESCAPE '\\' OR fold(sector) LIKE ? ESCAPE '\\')")
         values.extend([pattern] * 5)
-    for field in ("location", "sector", "modality", "schedule"):
+    for field in ("location", "modality", "schedule"):
         value = _text(filters.get(field), 200)
         if value:
             conditions.append('fold(' + field + ') = fold(?)')
@@ -364,7 +365,12 @@ def public_jobs(conn, filters=None):
         conditions.append("collected_at >= ?")
         values.append((datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds"))
     rows = conn.execute("SELECT * FROM jobs WHERE " + " AND ".join(conditions) + " ORDER BY collected_at DESC,id DESC", values).fetchall()
-    return [job_dict(row) for row in rows]
+    jobs = [job_dict(row) for row in rows]
+    sector = _text(filters.get('sector'), 200)
+    if sector:
+        selected = categories.known(sector)
+        jobs = [job for job in jobs if selected and job['sector'] == selected]
+    return jobs
 
 
 def public_job(conn, job_id):

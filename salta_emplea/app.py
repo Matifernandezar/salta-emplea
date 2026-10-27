@@ -18,7 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from . import db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
+from . import categories, db, domain, extraction, guides, homepage, image_pipeline, mail_webhooks, operations, public_metadata, source_catalog
 from .config import load_env
 
 
@@ -114,6 +114,8 @@ def create_app(config=None):
         return session['csrf']
 
     app.jinja_env.globals['csrf_token'] = csrf_token
+    app.jinja_env.globals['job_categories'] = categories.CATEGORIES
+    app.jinja_env.filters['category'] = categories.normalize
     app.jinja_env.filters['value'] = lambda x: x if x not in (None, '', []) else 'No informado'
     app.jinja_env.filters['date'] = lambda x: '/'.join(str(x)[:10].split('-')[::-1]) if x else 'No informado'
     def deadline_date(value, input_format=False):
@@ -200,6 +202,8 @@ def create_app(config=None):
         if row is None:
             abort(404)
         result = dict(row)
+        if 'sector' in result:
+            result['sector'] = categories.normalize(result['sector'])
         for key in ('flags', 'uncertain_fields'):
             if key in result and isinstance(result[key], str):
                 try:
@@ -323,6 +327,7 @@ def create_app(config=None):
 
     def job_form(existing=None):
         data = request.form.to_dict()
+        data['sector'] = categories.normalize(data.get('sector'))
         if 'uncertain_fields' in data:
             data['uncertain_fields'] = [x.strip() for x in data['uncertain_fields'].split(',') if x.strip()]
         # Estado, fechas de recopilación y aprobador nunca se toman del formulario.
@@ -774,13 +779,13 @@ def create_app(config=None):
                     db.mailer_lock(conn)
                     row = conn.execute('SELECT * FROM subscribers WHERE email=?', (email,)).fetchone()
                     if not row:
-                        cursor = conn.execute('INSERT INTO subscribers(email,locality,sector,modality,frequency,status,token_hash,created_at) VALUES (?,?,?,?,?,?,?,?)', (email, request.form.get('location', '')[:150], request.form.get('sector', '')[:150], request.form.get('modality', '')[:40], frequency, 'pending', '', domain.now()))
+                        cursor = conn.execute('INSERT INTO subscribers(email,locality,sector,modality,frequency,status,token_hash,created_at) VALUES (?,?,?,?,?,?,?,?)', (email, request.form.get('location', '')[:150], categories.normalize(request.form.get('sector')) or '', request.form.get('modality', '')[:40], frequency, 'pending', '', domain.now()))
                         subscriber_id = cursor.lastrowid
                     elif row['status'] == 'confirmed':
                         subscriber_id = None  # No cambiar preferencias ajenas sin confirmar otra vez.
                     else:
                         subscriber_id = row['id']
-                        conn.execute("UPDATE subscribers SET status='pending',locality=?,sector=?,modality=?,frequency=? WHERE id=?", (request.form.get('location', '')[:150], request.form.get('sector', '')[:150], request.form.get('modality', '')[:40], frequency, subscriber_id))
+                        conn.execute("UPDATE subscribers SET status='pending',locality=?,sector=?,modality=?,frequency=? WHERE id=?", (request.form.get('location', '')[:150], categories.normalize(request.form.get('sector')) or '', request.form.get('modality', '')[:40], frequency, subscriber_id))
                     if subscriber_id:
                         mailer.queue_confirmation(conn, subscriber_id, app.config['PUBLIC_BASE_URL'], app.config['SECRET_KEY'])
                 return render_template('message.html', title='Solicitud recibida', message='Si corresponde, recibirás un enlace para confirmar el correo. La suscripción se activa solo después de confirmarlo. Si ya estás suscripto, conservamos tus preferencias.')

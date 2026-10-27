@@ -20,7 +20,7 @@
 <label class="field">Localidad<input name="location" maxlength="120" value="{{ data.location|default('', true) }}" placeholder="Todas las localidades">
 <span class="field-help">Dejá vacío para recibir ofertas de toda la provincia.</span>
 </label>
-<label class="field">Rubro<input name="sector" maxlength="120" value="{{ data.sector|default('', true) }}" placeholder="Todos los rubros">
+<label class="field">Categoría<select name="sector"><option value="">Todas las categorías</option>{% for category in job_categories %}<option value="{{ category }}"{% if data.sector|category == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select>
 </label>
 <label class="field">Modalidad<select name="modality">
 <option value="">Todas las modalidades</option>{% for option in ['presencial','híbrida','remota'] %}<option value="{{ option }}"{% if data.modality == option %} selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select>

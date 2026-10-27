@@ -5,7 +5,7 @@ import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 
-from . import extraction
+from . import categories, extraction
 
 URL = 'https://api.anthropic.com/v1/messages'
 DEFAULT_MODEL = 'claude-haiku-5-5'
@@ -23,7 +23,13 @@ y evidence (fragmento literal de text que lo respalda). Omití datos ausentes,
 ambiguos o ilegibles. No infieras localidad, empresa, país, prefijo telefónico,
 fechas ni sueldo. No completes enlaces, correos o números cortados. Para
 application_url copiá el correo, enlace o teléfono completo tal como aparece.
-La modalidad solo puede ser presencial, remota o híbrida si está explícita.'''
+La modalidad solo puede ser presencial, remota o híbrida si está explícita.
+Para sector, clasificá la función del puesto en UNA de las categorías de la lista
+que sigue. Solo este campo es una clasificación editorial: value debe ser el
+nombre exacto de la categoría y evidence debe citar el puesto o sus tareas de
+text. Si no hay información suficiente omití sector; usá Otros si el puesto no
+encaja en las demás. No inventes categorías. Lista:
+''' + '\n'.join(categories.CATEGORIES)
 
 
 def _prepared(data):
@@ -43,11 +49,14 @@ def _prepared(data):
             continue
         value, evidence = item.get('value'), item.get('evidence')
         if (not isinstance(value, str) or not value.strip() or not isinstance(evidence, str)
-                or not evidence.strip() or evidence not in text or value not in evidence
+                or not evidence.strip() or evidence not in text
+                or (field != 'sector' and value not in evidence)
                 or not extraction._valid_text(value)):
             prepared['uncertain_fields'].append(field)
             continue
-        if field == 'application_url':
+        if field == 'sector':
+            value = value if value in categories.CATEGORIES else None
+        elif field == 'application_url':
             value = extraction._contact(value, 'postulacion')
         elif field == 'modality':
             value = {'presencial': 'presencial', 'remota': 'remota', 'remoto': 'remota',
@@ -60,6 +69,8 @@ def _prepared(data):
     if text.strip():
         prepared['fields']['description'] = text.strip()
         prepared['evidence']['description'] = text.strip()
+    if 'sector' in prepared['fields']:
+        prepared['uncertain_fields'].append('Categoría sugerida: revisar según el puesto')
     prepared['uncertain_fields'].extend(extraction._NEVER_INFERRED)
     warnings = ['external_instructions'] if extraction._external_instructions(text) else []
     return {'text': text, 'provider': 'anthropic', 'warnings': warnings, 'prepared': prepared}
@@ -79,7 +90,9 @@ def extract_image(image_bytes, api_key, model=DEFAULT_MODEL, *, opener=None):
         'required': ['value', 'evidence'], 'additionalProperties': False}
     schema = {'type': 'object', 'properties': {
         'text': {'type': 'string'}, 'fields': {'type': 'object',
-            'properties': {key: item_schema for key in LABELS}, 'additionalProperties': False}},
+            'properties': {key: (dict(item_schema, properties={**item_schema['properties'],
+                'value': {'type': 'string', 'enum': list(categories.CATEGORIES)}})
+                if key == 'sector' else item_schema) for key in LABELS}, 'additionalProperties': False}},
         'required': ['text', 'fields'], 'additionalProperties': False}
     body = {'model': model, 'max_tokens': 4096, 'system': SYSTEM,
             'messages': [{'role': 'user', 'content': [

@@ -37,7 +37,7 @@
       </a>
       <nav class="main-nav" aria-label="Navegación principal">
         <a href="{{ url_for('index', _anchor='buscar') }}"{% if request.endpoint == 'index' %} aria-current="page"{% endif %}>Buscar empleo</a>
-        <a href="{{ url_for('index', _anchor='rubros') }}">Rubros</a>
+        <a href="{{ url_for('index', _anchor='rubros') }}">Categorías</a>
         <a href="{{ url_for('index', _anchor='guias') }}">Guías útiles</a>
       </nav>
       <a class="button button-small button-outline header-publish" href="{{ url_for('submit_job') }}">Publicar oferta</a>

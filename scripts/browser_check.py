@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.serving import make_server
 
-from salta_emplea import db, extraction, claude_extraction
+from salta_emplea import db, extraction, claude_extraction, categories
 from salta_emplea.app import create_app
 
 PASSWORD = 'PRUEBA-contraseña-ficticia-solo-navegador'
@@ -115,7 +115,7 @@ def run_circuit(browser, viewport):
             page.goto(origin + '/publicar')
             data = {
                 'title': TITLE, 'company': 'PRUEBA Comercio ficticio',
-                'location': 'Salta Capital', 'sector': 'Comercio',
+                'location': 'Salta Capital', 'sector': 'Ventas',
                 'schedule': 'Jornada completa', 'contract_type': 'PRUEBA temporal',
                 'description': 'PRUEBA: aviso ficticio, exclusivo de QA. No postularse.',
                 'requirements': 'PRUEBA: requisito transcripto de una fuente ficticia.',
@@ -124,7 +124,11 @@ def run_circuit(browser, viewport):
                 'original_text': 'PRUEBA: atención en comercio. Aviso ficticio de QA.',
             }
             for name, value in data.items():
-                page.locator(f'form [name="{name}"]').fill(value)
+                field = page.locator(f'form [name="{name}"]')
+                if name == 'sector':
+                    field.select_option(value)
+                else:
+                    field.fill(value)
             page.locator('[name="modality"]').select_option('presencial')
             page.locator('[name="consent"]').check()
             page.get_by_role('button', name='Enviar para revisión').click()
@@ -162,7 +166,7 @@ def run_circuit(browser, viewport):
             public.locator('[name="q"]').fill('atención')
             open_search_filters(public)
             for name, value in {
-                'location': 'Salta Capital', 'sector': 'Comercio',
+                'location': 'Salta Capital', 'sector': 'Ventas',
                 'modality': 'presencial', 'schedule': 'Jornada completa', 'days': '7',
             }.items():
                 public.locator(f'[name="{name}"]').select_option(value)
@@ -244,7 +248,8 @@ def run_image_circuit(browser, viewport, provider_name='google_vision'):
         if provider_name == 'anthropic':
             prepared = extraction.prepare_text(literal_text)
             return claude_extraction._prepared({'text': literal_text, 'fields': {
-                field: {'value': value, 'evidence': prepared['evidence'][field]}
+                field: {'value': categories.normalize(value) if field == 'sector' else value,
+                        'evidence': prepared['evidence'][field]}
                 for field, value in prepared['fields'].items() if field in claude_extraction.LABELS}})
         return {'text': literal_text, 'provider': 'google_vision', 'warnings': []}
 

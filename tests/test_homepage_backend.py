@@ -84,7 +84,7 @@ def test_literal_sql_wildcards_in_sector_search(conn):
 def test_remove_one_filter_preserves_the_other_selections_and_anchor():
     filters = {
         'q': '<script>alert("PRUEBA")</script>', 'location': 'Orán',
-        'sector': 'Tecnología', 'modality': 'híbrida',
+        'sector': 'Informática / Telecomunicaciones', 'modality': 'híbrida',
         'schedule': 'Media jornada', 'days': '7',
     }
     model = homepage.presentation([], [], filters)
@@ -175,10 +175,10 @@ def test_zero_results_keep_selected_value_in_facets(app, conn):
         response = app.test_client().get('/?location=PRUEBA+sin+inventario&sector=Otro&days=7')
     assert response.status_code == 200
     context = contexts[0]
-    assert context['filters'] == {'location': 'PRUEBA sin inventario', 'sector': 'Otro', 'days': '7'}
+    assert context['filters'] == {'location': 'PRUEBA sin inventario', 'sector': 'Otros', 'days': '7'}
     assert context['jobs'] == []
     assert 'PRUEBA sin inventario' in context['facets']['locations']
-    assert 'Otro' in context['facets']['sectors']
+    assert 'Otros' in context['facets']['sectors']
     assert context['home']['is_filtered']
     assert context['home']['filtered_count'] == 0
 
@@ -199,7 +199,7 @@ def test_navigation_counts_only_approved_active_inventory(app, conn):
     model = context['home']
     assert {job['id'] for job in context['jobs']} == {active, remote}
     assert model['total_published'] == model['filtered_count'] == 2
-    assert {link['label'] for link in model['sector_links']} == {'Comercio', 'Tecnología'}
+    assert {link['label'] for link in model['sector_links']} == {'Ventas', 'Informática / Telecomunicaciones'}
     assert model['location_links'] == [{'label': 'Salta Capital', 'count': 1,
                                         'url': '/?location=Salta+Capital#ofertas'}]
     assert 'Worldwide' not in context['facets']['locations']
