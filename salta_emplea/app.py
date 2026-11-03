@@ -216,7 +216,7 @@ def create_app(config=None):
         reference = next((source for source in records if source['is_computrabajo']), None)
         state = computrabajo.access_state(reference)
         if all(app.config.get(key) for key in ('APIFY_API_TOKEN', 'APIFY_COMPUTRABAJO_ACTOR_ID', 'APIFY_WEBHOOK_SECRET')):
-            last = connection().execute('SELECT started_at,finished_at,status FROM apify_import_runs ORDER BY started_at DESC LIMIT 1').fetchone()
+            last = connection().execute('SELECT started_at,finished_at,status FROM apify_import_runs ORDER BY task_run_id DESC LIMIT 1').fetchone()
             state.update(label='Apify: variables presentes', apify_configured=True,
                          reason='La presencia de variables no verifica credenciales ni programación. Apify ejecuta la búsqueda; el webhook recibe el resultado. Revisá la tarea apify_computrabajo en el registro de corridas.',
                          last_run_at=(last['finished_at'] or last['started_at']) if last else None)

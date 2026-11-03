@@ -243,6 +243,16 @@ def _empty_result():
     return {'imported': 0, 'existing': 0, 'changed': 0, 'rejected': 0, 'processed': 0, 'reasons': {}}
 
 
+def dataset_digest(items):
+    # Ni las fechas inconsistentes ni los destinos descartados participan en
+    # decisiones de recuperación. Tampoco se persisten sus valores originales.
+    fields = ('jobId', 'jobUrl', 'title', 'companyName', 'location', 'countryCode',
+              'descriptionText', 'publishDate', 'scrapedAt', 'contentHash')
+    used = [{field: item.get(field) for field in fields} if isinstance(item, dict) else None
+            for item in items]
+    return hashlib.sha256(json.dumps(used, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def import_record(conn, record, run_id, dataset_id):
     data, metadata = normalize_record(record)
     existing = conn.execute('SELECT * FROM external_jobs WHERE source_name=? AND external_id=?',
@@ -299,7 +309,7 @@ def process_run(conn, config, run_id):
                 (run_id, stamp, json.dumps(result), task_id))
         try:
             items, dataset_id, actor_id = _dataset(config, run_id, deadline)
-            digest = hashlib.sha256(json.dumps(items, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            digest = dataset_digest(items)
             if previous and previous['dataset_hash'] and previous['dataset_hash'] != digest:
                 raise ImportFailure('dataset_changed', 409)
             with conn:

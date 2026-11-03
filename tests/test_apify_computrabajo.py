@@ -264,6 +264,8 @@ def test_interrupcion_recupera_cursor_sin_duplicar_y_detecta_dataset_mutado(app,
     assert notify(app).json['error'] == 'dataset_changed'
     assert len(jobs(conn)) == 2
     provider['records'] = saved
+    provider['records'][0]['publishDateISO'] = 'fecha corregida pero aún no fiable'
+    provider['records'][0]['applyUrl'] = 'https://candidato.ar.computrabajo.com/otro'
     result = notify(app).json
     assert result['imported'] == 5 and result['processed'] == 5
     assert len(jobs(conn)) == 5 and conn.execute('SELECT count(*) FROM external_jobs').fetchone()[0] == 5
